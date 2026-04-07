@@ -113,6 +113,7 @@ class Rendicion {
         tc.nombre as tipo_comprobante_nombre,
         p.razon_social as proveedor_nombre,
         fed.monto as monto_original,
+        fed.partida as partida,
         clf.nombre as clasificador_nombre
        FROM rendiciones r
        LEFT JOIN tipo_comprobante tc ON r.tipo_comprobante_id = tc.id

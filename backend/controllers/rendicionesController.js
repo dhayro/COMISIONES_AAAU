@@ -119,6 +119,29 @@ exports.actualizarRendicion = async (req, res) => {
   }
 };
 
+// 🆕 GET /api/rendiciones/obtener-por-formato/:formato_emision_id
+// Obtener todas las rendiciones de un formato emitido
+exports.obtenerPorFormato = async (req, res) => {
+  try {
+    const { formato_emision_id } = req.params;
+
+    if (!formato_emision_id) {
+      return res.status(400).json({ error: 'formato_emision_id es requerido' });
+    }
+
+    const rendiciones = await Rendicion.listarPorFormato(formato_emision_id);
+    
+    return res.json({ 
+      success: true,
+      rendiciones: rendiciones || [],
+      total: (rendiciones || []).length,
+    });
+  } catch (error) {
+    console.error('❌ Error en obtenerPorFormato:', error);
+    return res.status(500).json({ error: 'Error al obtener rendiciones', details: error.message });
+  }
+};
+
 // DELETE /api/rendiciones/:id
 exports.eliminarRendicion = async (req, res) => {
   try {

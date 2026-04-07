@@ -8,6 +8,9 @@ router.post('/crear', rendicionesController.crearRendicion);
 // Listar
 router.get('/listar', rendicionesController.listarRendiciones);
 
+// 🆕 Obtener rendiciones por formato_emision_id (ANTES de /:id para evitar conflicto)
+router.get('/obtener-por-formato/:formato_emision_id', rendicionesController.obtenerPorFormato);
+
 // Obtener
 router.get('/:id', rendicionesController.obtenerRendicion);
 
