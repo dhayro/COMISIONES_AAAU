@@ -104,6 +104,10 @@ exports.obtenerComision = async (req, res) => {
         cc.id,
         cc.usuario_id,
         u.nombre as usuario_nombre,
+        u.ambito_id,
+        a.nombre_largo as ambito_nombre,
+        u.cargo_id,
+        cargo.nombre as cargo_nombre,
         cl.id as clasificador_id,
         cl.partida,
         cl.nombre as clasificador_nombre,
@@ -112,6 +116,8 @@ exports.obtenerComision = async (req, res) => {
         cc.monto
        FROM comision_comisionados cc
        JOIN users u ON cc.usuario_id = u.id
+       LEFT JOIN ambitos a ON u.ambito_id = a.id
+       LEFT JOIN cargos cargo ON u.cargo_id = cargo.id
        JOIN clasificadores cl ON cc.clasificador_id = cl.id
        WHERE cc.comision_id = ?
        ORDER BY u.nombre, cl.partida`,
@@ -136,6 +142,10 @@ exports.obtenerComision = async (req, res) => {
         comisionadosMap[row.usuario_id] = {
           usuario_id: row.usuario_id,
           usuario_nombre: row.usuario_nombre,
+          ambito_id: row.ambito_id,
+          ambito_nombre: row.ambito_nombre || 'SIN DIRECCIÓN ASIGNADA',
+          cargo_id: row.cargo_id,
+          cargo_nombre: row.cargo_nombre,
           montos_por_clasificador: {},
           monto_total: 0,
         };
@@ -169,6 +179,7 @@ exports.obtenerComision = async (req, res) => {
     res.json({
       ...comisionData,
       comisionados,
+      comisionados_detalle: comisionadosRows, // 🆕 Agregar detalles sin agrupar para frontend
       clasificadores: clasificadores.sort((a, b) => (a.partida || '').localeCompare(b.partida || '')),
       monto_total,
     });
@@ -182,10 +193,11 @@ exports.listarComisiones = async (req, res) => {
   try {
     const { solo_mias } = req.query;
     const rolUsuario = req.user.rol;
+    const userAmbitoId = req.user.ambito_id;
     
     // Si es usuario regular, SIEMPRE ve solo sus propias comisiones
-    // Si es jefe o admin, ve todas a menos que pase solo_mias=true
-    // Si es administrativo, ve solo las APROBADAS
+    // Si es administrativo, ve comisiones APROBADAS de su ámbito (y ALAs si es AAA)
+    // Si es jefe o admin, ve todas las comisiones aprobadas (o todas si admin)
     
     let usuarioId = null;
     
@@ -197,7 +209,7 @@ exports.listarComisiones = async (req, res) => {
       usuarioId = req.user.id;
     }
     
-    const comisiones = await Comision.listar(usuarioId, rolUsuario);
+    const comisiones = await Comision.listar(usuarioId, rolUsuario, userAmbitoId);
     res.json(comisiones);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1034,11 +1046,19 @@ exports.obtenerReportePresupuestosAsignados = async (req, res) => {
  */
 exports.obtenerComisionesParaEmisionFormatos = async (req, res) => {
   try {
-    const { usuarioId, rol } = req.user; // Datos del usuario logueado
+    // Extraer datos del token JWT (el middleware los pone en req.user)
+    const usuarioId = req.user.id; // ⚠️ Importante: JWT almacena 'id', no 'usuarioId'
+    const rol = req.user.rol;
+    const userAmbitoId = req.user.ambito_id;
     const pool = require('../config/database').pool;
 
-    let query = `SELECT 
-      c.id,
+    console.log('🔍 obtenerComisionesParaEmisionFormatos');
+    console.log('   req.user:', req.user);
+    console.log('   usuarioId (extraído):', usuarioId);
+    console.log('   rol:', rol);
+    console.log('   userAmbitoId:', userAmbitoId);
+
+    let query = `SELECT DISTINCT c.id,
       c.ambito_id,
       a.nombre_corto as ambito_nombre,
       c.meta_id,
@@ -1047,6 +1067,7 @@ exports.obtenerComisionesParaEmisionFormatos = async (req, res) => {
       c.usuario_id,
       u.nombre as usuario_nombre,
       c.lugar,
+      c.ruta,
       c.modalidad_viaje,
       c.fecha_salida,
       c.fecha_retorno,
@@ -1054,31 +1075,83 @@ exports.obtenerComisionesParaEmisionFormatos = async (req, res) => {
       c.costo_xdia,
       c.observacion,
       c.presupuesto_estado,
-      c.aprobacion_estado,
-      COUNT(DISTINCT cc.usuario_id) as cantidad_comisionados,
-      COALESCE(SUM(cc.monto), 0) as monto_total
+      c.aprobacion_estado
     FROM comisiones c
     LEFT JOIN ambitos a ON c.ambito_id = a.id
     LEFT JOIN metas m ON c.meta_id = m.id
-    LEFT JOIN users u ON c.usuario_id = u.id
-    LEFT JOIN comision_comisionados cc ON c.id = cc.comision_id
-    WHERE c.presupuesto_estado = 'PRESUPUESTO ASIGNADO'
-      AND c.aprobacion_estado = 'APROBADA'`;
+    LEFT JOIN users u ON c.usuario_id = u.id`;
 
     const params = [];
+    const condiciones = [];
+
+    // Siempre debe cumplir estos requisitos
+    condiciones.push('c.presupuesto_estado = "PRESUPUESTO ASIGNADO"');
+    condiciones.push('c.aprobacion_estado = "APROBADA"');
 
     // Filtrar según el rol del usuario
     if (rol === 'usuario') {
-      // Los usuarios ven solo sus propias comisiones
-      query += ` AND c.usuario_id = ?`;
+      // USUARIO: Ver comisiones donde es comisionado (aparece en comision_comisionados)
+      query += ` INNER JOIN comision_comisionados cc ON c.id = cc.comision_id
+                 INNER JOIN users comisionados ON cc.usuario_id = comisionados.id`;
+      condiciones.push('comisionados.id = ?');
       params.push(usuarioId);
+      console.log('   📍 Filtro USUARIO aplicado: usuario_id =', usuarioId);
+    } else if (rol === 'administrativo' && userAmbitoId) {
+      // ADMINISTRATIVO: Ver solo comisiones donde hay comisionados del mismo ámbito
+      query += ` INNER JOIN comision_comisionados cc ON c.id = cc.comision_id
+                 INNER JOIN users comisionados ON cc.usuario_id = comisionados.id`;
+      condiciones.push('comisionados.ambito_id = ?');
+      params.push(userAmbitoId);
     }
-    // Si es administrativo, jefe o admin, ve todas las comisiones que cumplen los criterios
+    // JEFE: Ver todas las comisiones aprobadas con presupuesto asignado (sin filtro adicional)
+    // ADMIN: ve todas las comisiones
 
-    query += ` GROUP BY c.id
-    ORDER BY c.fecha_salida DESC, c.id DESC`;
+    if (condiciones.length > 0) {
+      query += ' WHERE ' + condiciones.join(' AND ');
+    }
+    query += ` ORDER BY c.fecha_salida DESC, c.id DESC`;
+
+    console.log('   📝 Query:', query);
+    console.log('   📍 Params:', params);
 
     const [comisiones] = await pool.query(query, params);
+
+    console.log('   ✓ Comisiones encontradas:', comisiones.length);
+    if (comisiones.length > 0) {
+      console.log('   📌 Primera comisión:', comisiones[0]);
+    } else {
+      console.log('   ⚠️  RESULTADO VACÍO - Verificando datos en DB...');
+      
+      // Debug: Verificar si hay comisiones aprobadas con presupuesto asignado
+      const [allAprobadas] = await pool.query(
+        `SELECT id, lugar, aprobacion_estado, presupuesto_estado FROM comisiones 
+         WHERE aprobacion_estado = "APROBADA" AND presupuesto_estado = "PRESUPUESTO ASIGNADO" LIMIT 5`
+      );
+      console.log('   💾 Total de comisiones aprobadas + presupuesto:', allAprobadas.length);
+      
+      // Debug: Verificar comisionados del usuario
+      const [comisionadosDelUsuario] = await pool.query(
+        `SELECT cc.comision_id, u.nombre, c.aprobacion_estado, c.presupuesto_estado 
+         FROM comision_comisionados cc
+         JOIN users u ON cc.usuario_id = u.id
+         JOIN comisiones c ON cc.comision_id = c.id
+         WHERE cc.usuario_id = ? LIMIT 10`,
+        [usuarioId]
+      );
+      console.log('   💾 Comisionados asignados al usuario:', comisionadosDelUsuario.length);
+      comisionadosDelUsuario.forEach(row => {
+        console.log(`      - Comisión ${row.comision_id}: ${row.aprobacion_estado} / ${row.presupuesto_estado}`);
+      });
+    }
+    
+    if (comisiones.length === 0) {
+      console.log('   ⚠️  No hay comisiones para mostrar');
+      return res.json({
+        success: true,
+        total: 0,
+        comisiones: []
+      });
+    }
 
     // Obtener detalles completos de cada comisión
     const comisionesCompletas = await Promise.all(
@@ -1089,7 +1162,8 @@ exports.obtenerComisionesParaEmisionFormatos = async (req, res) => {
                   cargo.nombre as cargo_nombre,
                   amb.nombre_largo as ambito_nombre,
                   cc.clasificador_id, cl.nombre as clasificador_nombre, cl.partida,
-                  cc.dias, cc.costo_xdia, cc.monto
+                  cc.dias, cc.costo_xdia, cc.monto,
+                  cc.observacion
            FROM comision_comisionados cc
            JOIN users u ON cc.usuario_id = u.id
            LEFT JOIN cargos cargo ON u.cargo_id = cargo.id

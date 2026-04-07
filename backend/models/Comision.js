@@ -91,9 +91,9 @@ class Comision {
   }
 
   // Listar todas las comisiones
-  static async listar(usuarioId = null, rolUsuario = null) {
+  static async listar(usuarioId = null, rolUsuario = null, userAmbitoId = null) {
     try {
-      let query = `SELECT c.*, a.nombre_corto as ambito_nombre, m.numero_meta, cv.nombre as costo_viaje_nombre
+      let query = `SELECT DISTINCT c.*, a.nombre_corto as ambito_nombre, m.numero_meta, cv.nombre as costo_viaje_nombre
                    FROM comisiones c 
                    LEFT JOIN ambitos a ON c.ambito_id = a.id
                    LEFT JOIN metas m ON c.meta_id = m.id
@@ -101,16 +101,31 @@ class Comision {
       const params = [];
       const condiciones = [];
 
-      // Si es administrativo, solo ve comisiones APROBADAS
-      if (rolUsuario === 'administrativo') {
+      // Si es administrativo, filtra por:
+      // 1. Solo comisiones APROBADAS
+      // 2. Solo comisiones que tengan comisionados del ámbito del usuario
+      if (rolUsuario === 'administrativo' && userAmbitoId) {
         condiciones.push('c.aprobacion_estado = "APROBADA"');
+        
+        // Filtrar comisiones que tienen comisionados del ámbito del usuario
+        // Una comisión se muestra si tiene al menos un comisionado con ambito_id = userAmbitoId
+        query += ` INNER JOIN comision_comisionados cc ON c.id = cc.comision_id
+                   INNER JOIN users u ON cc.usuario_id = u.id`;
+        
+        condiciones.push(`u.ambito_id = ?`);
+        params.push(userAmbitoId);
       }
-      // Si es usuario regular, ve solo sus propias comisiones
+      // Si es usuario regular, ve solo las comisiones donde es comisionado
       else if (rolUsuario === 'usuario' && usuarioId) {
-        condiciones.push('c.usuario_id = ?');
+        // Usuarios regulares ven comisiones donde aparecen como comisionados
+        query += ` INNER JOIN comision_comisionados cc ON c.id = cc.comision_id`;
+        condiciones.push('cc.usuario_id = ?');
         params.push(usuarioId);
       }
-      // Si es jefe, ve todas las comisiones
+      // Si es jefe, ve todas las comisiones (solo aprobadas)
+      else if (rolUsuario === 'jefe') {
+        condiciones.push('c.aprobacion_estado = "APROBADA"');
+      }
       // Si es admin, ve todas las comisiones
 
       if (condiciones.length > 0) {
@@ -230,7 +245,7 @@ class Comision {
   static async obtenerComisionados(comisionId) {
     try {
       const [comisionados] = await pool.query(
-        `SELECT cc.*, u.nombre as usuario_nombre, u.email,
+        `SELECT cc.*, u.nombre as usuario_nombre, u.email, u.ambito_id,
                 cl.partida, cl.nombre as clasificador_nombre
          FROM comision_comisionados cc
          JOIN users u ON cc.usuario_id = u.id

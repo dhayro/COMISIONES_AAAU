@@ -58,9 +58,9 @@ const login = async (req, res) => {
     const connection = await pool.getConnection();
 
     try {
-      // Buscar usuario por username
+      // Buscar usuario por username (incluir ambito_id)
       const [users] = await connection.query(
-        'SELECT id, email, password, nombre, rol FROM users WHERE username = ?',
+        'SELECT id, email, password, nombre, rol, ambito_id FROM users WHERE username = ?',
         [username]
       );
 
@@ -77,9 +77,9 @@ const login = async (req, res) => {
         return res.status(401).json({ error: 'Credenciales inválidas' });
       }
 
-      // Generar JWT
+      // Generar JWT (incluir ambito_id)
       const token = jwt.sign(
-        { id: user.id, email: user.email, username: username, rol: user.rol },
+        { id: user.id, email: user.email, username: username, rol: user.rol, ambito_id: user.ambito_id },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRE }
       );
@@ -92,7 +92,8 @@ const login = async (req, res) => {
           email: user.email,
           username: username,
           nombre: user.nombre,
-          rol: user.rol
+          rol: user.rol,
+          ambito_id: user.ambito_id
         }
       });
     } finally {
@@ -111,7 +112,7 @@ const obtenerPerfil = async (req, res) => {
 
     try {
       const [users] = await connection.query(
-        'SELECT id, email, nombre, rol FROM users WHERE id = ?',
+        'SELECT id, email, nombre, rol, ambito_id FROM users WHERE id = ?',
         [req.user.id]
       );
 

@@ -23,6 +23,30 @@ class Meta {
     }
   }
 
+  // 🆕 Listar metas por ámbito - para usuarios administrativos
+  static async listarPorAmbito(ambitoId) {
+    try {
+      const [metas] = await pool.query(
+        `SELECT 
+          m.id, 
+          m.nombre, 
+          m.numero_meta, 
+          m.periodo, 
+          m.ambito_id,
+          a.nombre_corto as ambito_nombre,
+          m.activo 
+        FROM metas m
+        LEFT JOIN ambitos a ON m.ambito_id = a.id
+        WHERE m.activo = 1 AND m.ambito_id = ?
+        ORDER BY m.nombre`,
+        [ambitoId]
+      );
+      return metas;
+    } catch (error) {
+      throw new Error(`Error al listar metas por ámbito: ${error.message}`);
+    }
+  }
+
   static async obtenerPorId(id) {
     try {
       const [metas] = await pool.query(

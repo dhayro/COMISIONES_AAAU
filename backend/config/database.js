@@ -253,6 +253,7 @@ const initDatabase = async () => {
         email VARCHAR(100) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         nombre VARCHAR(100) NOT NULL,
+        iniciales VARCHAR(10),
         dni VARCHAR(20),
         rol ENUM('admin', 'jefe', 'usuario', 'administrativo') DEFAULT 'usuario',
         ambito_id INT,
@@ -265,7 +266,8 @@ const initDatabase = async () => {
         INDEX idx_username (username),
         INDEX idx_email (email),
         INDEX idx_ambito (ambito_id),
-        INDEX idx_cargo (cargo_id)
+        INDEX idx_cargo (cargo_id),
+        INDEX idx_iniciales (iniciales)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
     console.log('✅ Tabla users verificada/creada');

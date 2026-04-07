@@ -2,7 +2,52 @@ const Meta = require('../models/Meta');
 
 exports.listar = async (req, res) => {
   try {
-    const metas = await Meta.listar();
+    const rol = req.user?.rol;  // 🆕 Obtener rol del usuario
+    const userAmbitoId = req.user?.ambito_id;  // 🆕 Obtener ambito_id del usuario
+
+    console.log(`📍 LISTAR METAS - Rol: ${rol}, Ámbito: ${userAmbitoId}`);
+
+    let metas;
+    
+    // 🆕 Filtrar según el rol
+    if (rol === 'admin') {
+      // ADMIN: Ve todas las metas
+      console.log(`🔐 Rol ADMIN: mostrando todas las metas`);
+      metas = await Meta.listar();
+    } else if ((rol === 'administrativo' || rol === 'jefe') && userAmbitoId) {
+      // 🆕 ADMINISTRATIVO y JEFE: Ver solo metas de su ámbito
+      console.log(`🔐 Rol ${rol}: mostrando solo metas del ámbito ${userAmbitoId}`);
+      metas = await Meta.listarPorAmbito(userAmbitoId);
+    } else if (rol === 'usuario' && userAmbitoId) {
+      // 🆕 USUARIO: Ver solo metas de su ámbito
+      console.log(`🔐 Rol usuario: mostrando solo metas del ámbito ${userAmbitoId}`);
+      metas = await Meta.listarPorAmbito(userAmbitoId);
+    } else {
+      // 🆕 Sin rol o sin ambito_id: No mostrar nada
+      console.log(`⚠️  Sin rol o sin ambito_id: devolviendo array vacío`);
+      metas = [];
+    }
+
+    console.log(`✅ Metas a mostrar: ${metas.length}`);
+    res.json(metas);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 🆕 Listar metas por ámbito - para usuarios administrativos
+exports.listarPorAmbito = async (req, res) => {
+  try {
+    const { ambitoId } = req.params;
+    
+    if (!ambitoId) {
+      return res.status(400).json({ error: 'ambitoId es requerido' });
+    }
+    
+    console.log(`🔐 Listando metas para ámbito ${ambitoId}`);
+    const metas = await Meta.listarPorAmbito(ambitoId);
+    console.log(`✅ Metas encontradas: ${metas.length}`);
+    
     res.json(metas);
   } catch (error) {
     res.status(500).json({ error: error.message });

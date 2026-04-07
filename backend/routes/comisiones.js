@@ -9,6 +9,7 @@ const metaController = require('../controllers/metaController');
 const fuenteFinanciamientoController = require('../controllers/fuenteFinanciamientoController');
 const cargoController = require('../controllers/cargoController');
 const pdfController = require('../controllers/pdfController');
+const formatoEmisionController = require('../controllers/formatoEmisionController');
 const authMiddleware = require('../middleware/auth');
 
 // Todas las rutas requieren autenticación
@@ -1239,6 +1240,26 @@ router.post('/admin/sincronizar-costos', comisionController.sincronizarCostosTot
  */
 router.get('/metas', metaController.listar);
 
+// 🆕 RUTA: Obtener metas por ámbito (para administrativos)
+/**
+ * @swagger
+ * /metas/por-ambito/{ambitoId}:
+ *   get:
+ *     summary: Obtener metas de un ámbito específico
+ *     tags: [Metas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: ambitoId
+ *         required: true
+ *         description: ID del ámbito
+ *     responses:
+ *       200:
+ *         description: Lista de metas del ámbito
+ */
+router.get('/metas/por-ambito/:ambitoId', metaController.listarPorAmbito);
+
 /**
  * @swagger
  * /metas/{id}:
@@ -1591,5 +1612,574 @@ router.put('/cargos/:id', cargoController.actualizarCargo);
  *         description: Cargo no encontrado
  */
 router.delete('/cargos/:id', cargoController.eliminarCargo);
+
+// ========== CERTIFICACIONES DE CRÉDITO PRESUPUESTARIO ==========
+const certificacionCreditoController = require('../controllers/certificacionCreditoController');
+
+/**
+ * @swagger
+ * /certificaciones-credito:
+ *   get:
+ *     summary: Listar todas las certificaciones de crédito
+ *     tags: [Certificaciones de Crédito]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: meta_id
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: fuente_financiamiento_id
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: estado_certificacion
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: mes
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de certificaciones
+ */
+router.get('/certificaciones-credito', certificacionCreditoController.listar);
+
+/**
+ * @swagger
+ * /certificaciones-credito:
+ *   post:
+ *     summary: Crear nueva certificación de crédito
+ *     tags: [Certificaciones de Crédito]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - nota
+ *               - mes
+ *               - tipo_documento
+ *               - numero_documento
+ *             properties:
+ *               nota:
+ *                 type: string
+ *               mes:
+ *                 type: string
+ *               fecha_aprobacion:
+ *                 type: string
+ *                 format: date
+ *               fecha_documento:
+ *                 type: string
+ *                 format: date
+ *               estado_certificacion:
+ *                 type: string
+ *               tipo_documento:
+ *                 type: string
+ *               numero_documento:
+ *                 type: string
+ *               justificacion:
+ *                 type: string
+ *               meta_id:
+ *                 type: integer
+ *               fuente_financiamiento_id:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Certificación creada exitosamente
+ */
+router.post('/certificaciones-credito', certificacionCreditoController.crear);
+
+/**
+ * @swagger
+ * /certificaciones-credito/{id}:
+ *   get:
+ *     summary: Obtener certificación por ID
+ *     tags: [Certificaciones de Crédito]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Certificación encontrada
+ *       404:
+ *         description: Certificación no encontrada
+ */
+router.get('/certificaciones-credito/:id', certificacionCreditoController.obtenerPorId);
+
+/**
+ * @swagger
+ * /certificaciones-credito/{id}:
+ *   put:
+ *     summary: Actualizar certificación
+ *     tags: [Certificaciones de Crédito]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               nota:
+ *                 type: string
+ *               mes:
+ *                 type: string
+ *               fecha_aprobacion:
+ *                 type: string
+ *                 format: date
+ *               fecha_documento:
+ *                 type: string
+ *                 format: date
+ *               estado_certificacion:
+ *                 type: string
+ *               tipo_documento:
+ *                 type: string
+ *               numero_documento:
+ *                 type: string
+ *               justificacion:
+ *                 type: string
+ *               meta_id:
+ *                 type: integer
+ *               fuente_financiamiento_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Certificación actualizada exitosamente
+ *       404:
+ *         description: Certificación no encontrada
+ */
+router.put('/certificaciones-credito/:id', certificacionCreditoController.actualizar);
+
+/**
+ * @swagger
+ * /certificaciones-credito/{id}:
+ *   delete:
+ *     summary: Eliminar certificación
+ *     tags: [Certificaciones de Crédito]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Certificación eliminada exitosamente
+ *       404:
+ *         description: Certificación no encontrada
+ */
+router.delete('/certificaciones-credito/:id', certificacionCreditoController.eliminar);
+
+// ========== DETALLES DE CERTIFICACIÓN ==========
+
+/**
+ * @swagger
+ * /certificaciones-credito/{certificacion_credito_id}/detalles:
+ *   get:
+ *     summary: Listar detalles de una certificación
+ *     tags: [Detalles Certificación]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: certificacion_credito_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lista de detalles
+ */
+router.get('/certificaciones-credito/:certificacion_credito_id/detalles', certificacionCreditoController.listarDetalles);
+
+/**
+ * @swagger
+ * /detalles-certificacion:
+ *   post:
+ *     summary: Crear detalle de certificación
+ *     tags: [Detalles Certificación]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - certificacion_credito_id
+ *               - clasificador_id
+ *               - monto
+ *             properties:
+ *               certificacion_credito_id:
+ *                 type: integer
+ *               clasificador_id:
+ *                 type: integer
+ *               monto:
+ *                 type: number
+ *     responses:
+ *       201:
+ *         description: Detalle creado exitosamente
+ */
+router.post('/detalles-certificacion', certificacionCreditoController.crearDetalle);
+
+/**
+ * @swagger
+ * /detalles-certificacion/{id}:
+ *   get:
+ *     summary: Obtener detalle por ID
+ *     tags: [Detalles Certificación]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Detalle encontrado
+ *       404:
+ *         description: Detalle no encontrado
+ */
+router.get('/detalles-certificacion/:id', certificacionCreditoController.obtenerDetallePorId);
+
+/**
+ * @swagger
+ * /detalles-certificacion/{id}:
+ *   put:
+ *     summary: Actualizar detalle de certificación
+ *     tags: [Detalles Certificación]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               clasificador_id:
+ *                 type: integer
+ *               monto:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Detalle actualizado exitosamente
+ *       404:
+ *         description: Detalle no encontrado
+ */
+router.put('/detalles-certificacion/:id', certificacionCreditoController.actualizarDetalle);
+
+/**
+ * @swagger
+ * /detalles-certificacion/{id}:
+ *   delete:
+ *     summary: Eliminar detalle de certificación
+ *     tags: [Detalles Certificación]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Detalle eliminado exitosamente
+ *       404:
+ *         description: Detalle no encontrado
+ */
+router.delete('/detalles-certificacion/:id', certificacionCreditoController.eliminarDetalle);
+
+/**
+ * @swagger
+ * /certificaciones-credito/{certificacion_credito_id}/total:
+ *   get:
+ *     summary: Obtener total de montos de una certificación
+ *     tags: [Detalles Certificación]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: certificacion_credito_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Total calculado
+ */
+router.get('/certificaciones-credito/:certificacion_credito_id/total', certificacionCreditoController.obtenerTotalMonto);
+
+// ========== FORMATO DE EMISIONES ==========
+
+/**
+ * @swagger
+ * /formatos-emisiones:
+ *   post:
+ *     summary: Crear nuevo formato de emisión
+ *     tags: [Formatos Emisión]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               comision_id: { type: integer }
+ *               usuario_id: { type: integer }
+ *               costo_viaje_id: { type: integer }
+ *               numero_documento: { type: string }
+ *               fecha_emision: { type: string, format: date-time }
+ *               lugar: { type: string }
+ *               ruta: { type: string }
+ *               modalidad_viaje: { type: string }
+ *               fecha_salida: { type: string, format: date-time }
+ *               fecha_retorno: { type: string, format: date-time }
+ *               num_dias: { type: integer }
+ *               numero_siaf: { type: string }
+ *               codigo_cp: { type: string }
+ *               tipo_emision: { type: string, enum: ['ANTICIPO', 'REEMBOLSO'] }
+ *               costo_xdia: { type: number }
+ *               monto_total: { type: number }
+ *               observacion: { type: string }
+ *     responses:
+ *       201:
+ *         description: Formato creado exitosamente
+ */
+router.post('/formatos-emisiones', formatoEmisionController.crear);
+
+/**
+ * @swagger
+ * /formatos-emisiones:
+ *   get:
+ *     summary: Listar formatos de emisión
+ *     tags: [Formatos Emisión]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: estado_emision
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: comision_id
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: tipo_emision
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de formatos
+ */
+router.get('/formatos-emisiones', formatoEmisionController.listar);
+
+/**
+ * @swagger
+ * /formatos-emisiones/{id}:
+ *   get:
+ *     summary: Obtener formato de emisión por ID
+ *     tags: [Formatos Emisión]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Formato encontrado
+ */
+router.get('/formatos-emisiones/:id', formatoEmisionController.obtenerPorId);
+
+/**
+ * @swagger
+ * /formatos-emisiones/{id}:
+ *   put:
+ *     summary: Actualizar formato de emisión
+ *     tags: [Formatos Emisión]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Formato actualizado
+ */
+router.put('/formatos-emisiones/:id', formatoEmisionController.actualizar);
+
+/**
+ * @swagger
+ * /formatos-emisiones/{id}:
+ *   delete:
+ *     summary: Eliminar formato de emisión
+ *     tags: [Formatos Emisión]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Formato eliminado
+ */
+router.delete('/formatos-emisiones/:id', formatoEmisionController.eliminar);
+
+/**
+ * @swagger
+ * /formatos-emisiones/{formato_id}/detalles:
+ *   get:
+ *     summary: Obtener detalles de un formato de emisión
+ *     tags: [Formatos Emisión]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: formato_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Detalles del formato
+ */
+router.get('/formatos-emisiones/:formato_id/detalles', formatoEmisionController.obtenerDetalles);
+
+/**
+ * @swagger
+ * /formatos-emisiones/{formato_id}/detalles:
+ *   post:
+ *     summary: Agregar detalle a formato de emisión
+ *     tags: [Formatos Emisión]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: formato_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               clasificador_id: { type: integer }
+ *               dias: { type: integer }
+ *               monto: { type: number }
+ *               descripcion: { type: string }
+ *               observacion: { type: string }
+ *               detalles_certificacion_credito_id: { type: integer }
+ *     responses:
+ *       201:
+ *         description: Detalle agregado
+ */
+router.post('/formatos-emisiones/:formato_id/detalles', formatoEmisionController.agregarDetalle);
+
+/**
+ * @swagger
+ * /formatos-emisiones/proximo-numero:
+ *   get:
+ *     summary: Obtener próximo número de documento
+ *     tags: [Formatos Emisión]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Número de documento generado
+ */
+router.get('/formatos-emisiones/proximo-numero/obtener', formatoEmisionController.obtenerProximoNumero);
+
+/**
+ * @swagger
+ * /formatos-emisiones/normalizar-estados:
+ *   post:
+ *     summary: Normalizar estados de formatos (con cert → EMITIDO, sin cert → BORRADOR)
+ *     tags: [Formatos Emisión]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Estados normalizados
+ */
+router.post('/formatos-emisiones/normalizar-estados', formatoEmisionController.normalizarEstados);
+
+/**
+ * @swagger
+ * /formatos-emisiones/reparar/montos-utilizados:
+ *   post:
+ *     summary: Reparar todos los montos_utilizados (recalcular desde detalles reales)
+ *     tags: [Formatos Emisión - Reparación]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Montos reparados exitosamente
+ */
+router.post('/formatos-emisiones/reparar/montos-utilizados', formatoEmisionController.repararMontosUtilizados);
+
+/**
+ * @swagger
+ * /formatos-emisiones/diagnostico/montos:
+ *   get:
+ *     summary: Diagnóstico - ver estado actual de todos los montos_utilizados
+ *     tags: [Formatos Emisión - Diagnóstico]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Diagnóstico completo de montos
+ */
+router.get('/formatos-emisiones/diagnostico/montos', formatoEmisionController.diagnosticoMontos);
 
 module.exports = router;
