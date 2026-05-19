@@ -18,13 +18,14 @@ class Rendicion {
         fecha_comprobante,
         monto,
         tipo_viatitico,
+        orden,
       } = datos;
 
       const [result] = await connection.query(
         `INSERT INTO rendiciones 
          (formato_emision_id, formato_emisiones_detalles_id, tipo_comprobante_id, proveedor_id, 
-          numero_comprobante, fecha_comprobante, monto, tipo_viatitico, estado_rendicion) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE')`,
+          numero_comprobante, fecha_comprobante, monto, tipo_viatitico, estado_rendicion, orden) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE', ?)`,
         [
           formato_emision_id || null,
           formato_emisiones_detalles_id,
@@ -34,6 +35,7 @@ class Rendicion {
           fecha_comprobante || null,
           monto || 0,
           tipo_viatitico || null,
+          orden || Date.now(),
         ]
       );
 
@@ -113,7 +115,8 @@ class Rendicion {
         tc.nombre as tipo_comprobante_nombre,
         p.razon_social as proveedor_nombre,
         fed.monto as monto_original,
-        clf.nombre as clasificador_nombre
+        clf.nombre as clasificador_nombre,
+        clf.partida as partida
        FROM rendiciones r
        LEFT JOIN tipo_comprobante tc ON r.tipo_comprobante_id = tc.id
        LEFT JOIN proveedores p ON r.proveedor_id = p.id
@@ -128,7 +131,7 @@ class Rendicion {
         params.push(formato_emision_id);
       }
 
-      query += ` ORDER BY r.creado_en DESC`;
+      query += ` ORDER BY r.orden ASC, r.creado_en ASC`;
 
       const [rows] = await connection.query(query, params);
 
@@ -158,6 +161,7 @@ class Rendicion {
         'tipo_viatitico',
         'estado_rendicion',
         'observacion_rechazo',
+        'orden',
       ];
 
       let query = 'UPDATE rendiciones SET ';

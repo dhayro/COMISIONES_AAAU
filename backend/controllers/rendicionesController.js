@@ -2,6 +2,7 @@ const Rendicion = require('../models/Rendicion');
 const Proveedor = require('../models/Proveedor');
 const TipoComprobante = require('../models/TipoComprobante');
 const FormatoEmision = require('../models/FormatoEmision');
+const Ruta = require('../models/Ruta');  // 🆕 Importar modelo de Ruta
 
 /**
  * Controller para rendiciones (nuevo modelo principal)
@@ -9,11 +10,16 @@ const FormatoEmision = require('../models/FormatoEmision');
 
 // POST /api/rendiciones/crear
 // 🆕 Acepta ARRAY de comprobantes para crear rendiciones en tabla existente
+// 🔄 ACTUALIZADO: Soporta creación, actualización y eliminación de comprobantes
 exports.crearRendicion = async (req, res) => {
   try {
     const {
       formato_emision_id,
-      comprobantes, // 🆕 Array de comprobantes
+      comprobantes, // Array antiguo (para compatibilidad)
+      comprobantes_nuevos,
+      comprobantes_actualizar,
+      comprobantes_eliminar,
+      modo, // 'crear' o 'actualizar'
     } = req.body;
 
     // Validaciones básicas
@@ -21,49 +27,159 @@ exports.crearRendicion = async (req, res) => {
       return res.status(400).json({ error: 'formato_emision_id es requerido' });
     }
 
-    if (!Array.isArray(comprobantes) || comprobantes.length === 0) {
-      return res.status(400).json({ error: 'Se requiere al menos un comprobante' });
-    }
-
     // Validar formato
     const formato = await FormatoEmision.obtenerPorId(formato_emision_id);
     if (!formato) {
       return res.status(404).json({ error: 'Formato no encontrado' });
     }
-    if (formato.estado_emision !== 'ENVIADO') {
-      return res.status(400).json({ error: 'Solo se pueden rendir formatos en estado ENVIADO' });
+
+    // 🔄 LÓGICA ACTUALIZADA
+    let comprobantesGuardados = [];
+    let totalMonto = 0;
+
+    if (modo === 'actualizar') {
+      // MODO ACTUALIZACIÓN: RENDIDO → RENDIDO (modificar rendición existente)
+      console.log('🔄 Modo ACTUALIZAR - Procesando cambios en rendición existente');
+
+      // 1️⃣ Eliminar comprobantes marcados
+      if (Array.isArray(comprobantes_eliminar) && comprobantes_eliminar.length > 0) {
+        for (const idRendicion of comprobantes_eliminar) {
+          await Rendicion.eliminar(idRendicion);
+          console.log(`❌ Comprobante ${idRendicion} eliminado`);
+        }
+      }
+
+      // 2️⃣ Actualizar comprobantes existentes
+      if (Array.isArray(comprobantes_actualizar) && comprobantes_actualizar.length > 0) {
+        for (const comprobante of comprobantes_actualizar) {
+          const datosActualizar = {
+            tipo_comprobante_id: comprobante.tipo_comprobante_id || null,
+            proveedor_id: comprobante.proveedor_id || null,
+            numero_comprobante: comprobante.numero_comprobante || null,
+            fecha_comprobante: comprobante.fecha_comprobante || null,
+            monto: parseFloat(comprobante.monto) || 0,
+            tipo_viatitico: comprobante.tipo_viatico || null,
+            observacion_rechazo: comprobante.observaciones || null,
+            orden: comprobante.orden || null,
+          };
+
+          await Rendicion.actualizar(comprobante.id, datosActualizar);
+          comprobantesGuardados.push(comprobante);
+          totalMonto += parseFloat(comprobante.monto) || 0;
+          console.log(`✏️ Comprobante ${comprobante.id} actualizado con orden ${comprobante.orden}`);
+        }
+      }
+
+      // 3️⃣ Agregar nuevos comprobantes
+      if (Array.isArray(comprobantes_nuevos) && comprobantes_nuevos.length > 0) {
+        for (const comprobante of comprobantes_nuevos) {
+          const datosComprobante = {
+            formato_emision_id: formato_emision_id,
+            formato_emisiones_detalles_id: comprobante.formato_emision_detalle_id,
+            tipo_comprobante_id: comprobante.tipo_comprobante_id || null,
+            proveedor_id: comprobante.proveedor_id || null,
+            numero_comprobante: comprobante.numero_comprobante || null,
+            fecha_comprobante: comprobante.fecha_comprobante || null,
+            monto: parseFloat(comprobante.monto) || 0,
+            tipo_viatitico: comprobante.tipo_viatico || null,
+            estado_rendicion: 'PENDIENTE',
+            orden: comprobante.orden || Date.now(),
+          };
+
+          const comprobanteSaved = await Rendicion.crear(datosComprobante);
+          comprobantesGuardados.push(comprobanteSaved);
+          totalMonto += parseFloat(comprobante.monto) || 0;
+          console.log(`➕ Nuevo comprobante ${comprobanteSaved.id} creado con orden ${comprobante.orden}`);
+        }
+      }
+
+      // Mantener estado en RENDIDO
+      await FormatoEmision.actualizar(formato_emision_id, { estado_emision: 'RENDIDO' });
+      console.log('📋 Estado del formato mantenido en RENDIDO');
+
+      // 🆕 Actualizar rutas si existen
+      const { rutas } = req.body;
+      if (Array.isArray(rutas) && rutas.length > 0) {
+        // Primero, eliminar rutas antiguas del formato
+        await Ruta.eliminarPorFormato(formato_emision_id);
+        console.log('🗑️ Rutas antiguas eliminadas');
+
+        // Luego, crear las nuevas rutas
+        for (const ruta of rutas) {
+          await Ruta.crear({
+            formato_emision_id: formato_emision_id,
+            origen: ruta.origen,
+            fecha_salida: ruta.fecha_salida,
+            destino: ruta.destino,
+            fecha_llegada: ruta.fecha_llegada,
+          });
+          console.log(`✅ Ruta creada: ${ruta.origen} → ${ruta.destino}`);
+        }
+      }
+
+    } else {
+      // MODO CREACIÓN: ENVIADO → RENDIDO (primera rendición)
+      console.log('✨ Modo CREAR - Primera rendición del formato');
+
+      if (formato.estado_emision !== 'ENVIADO' && formato.estado_emision !== 'PAGADO') {
+        return res.status(400).json({ error: 'Solo se pueden rendir formatos en estado ENVIADO o PAGADO' });
+      }
+
+      // Usar array antiguo o nuevo según lo que llegue
+      const comprobantesACrear = comprobantes || comprobantes_nuevos || [];
+
+      if (!Array.isArray(comprobantesACrear) || comprobantesACrear.length === 0) {
+        return res.status(400).json({ error: 'Se requiere al menos un comprobante' });
+      }
+
+      // 🆕 Insertar cada comprobante
+      for (const comprobante of comprobantesACrear) {
+        const datosComprobante = {
+          formato_emision_id: formato_emision_id,
+          formato_emisiones_detalles_id: comprobante.formato_emision_detalle_id,
+          tipo_comprobante_id: comprobante.tipo_comprobante_id || null,
+          proveedor_id: comprobante.proveedor_id || null,
+          numero_comprobante: comprobante.numero_comprobante || null,
+          fecha_comprobante: comprobante.fecha_comprobante || null,
+          monto: parseFloat(comprobante.monto) || 0,
+          tipo_viatitico: comprobante.tipo_viatico || null,
+          estado_rendicion: 'PENDIENTE',
+          orden: comprobante.orden || Date.now(),
+        };
+
+        const comprobanteSaved = await Rendicion.crear(datosComprobante);
+        comprobantesGuardados.push(comprobanteSaved);
+        totalMonto += parseFloat(comprobante.monto) || 0;
+      }
+
+      // 🆕 Cambiar estado de formato a RENDIDO
+      await FormatoEmision.actualizar(formato_emision_id, { estado_emision: 'RENDIDO' });
+      console.log('✅ Formato cambiado a estado RENDIDO');
+
+      // 🆕 Guardar rutas si existen
+      const { rutas } = req.body;
+      if (Array.isArray(rutas) && rutas.length > 0) {
+        for (const ruta of rutas) {
+          await Ruta.crear({
+            formato_emision_id: formato_emision_id,
+            origen: ruta.origen,
+            fecha_salida: ruta.fecha_salida,
+            destino: ruta.destino,
+            fecha_llegada: ruta.fecha_llegada,
+          });
+          console.log(`✅ Ruta creada: ${ruta.origen} → ${ruta.destino}`);
+        }
+      }
     }
-
-    // 🆕 Insertar cada comprobante en la tabla rendiciones existente
-    const comprobantesGuardados = [];
-    for (const comprobante of comprobantes) {
-      const datosComprobante = {
-        formato_emision_id: formato_emision_id,
-        formato_emisiones_detalles_id: comprobante.formato_emision_detalle_id,
-        tipo_comprobante_id: comprobante.tipo_comprobante_id || null,
-        proveedor_id: comprobante.proveedor_id || null,
-        numero_comprobante: comprobante.numero_comprobante || null,
-        fecha_comprobante: comprobante.fecha_comprobante || null,
-        monto: parseFloat(comprobante.monto) || 0,
-        tipo_viatitico: comprobante.tipo_viatico || null,
-        estado_rendicion: 'PENDIENTE',
-      };
-
-      // Guardar comprobante individual usando el modelo existente
-      const comprobanteSaved = await Rendicion.crear(datosComprobante);
-      comprobantesGuardados.push(comprobanteSaved);
-    }
-
-    // 🆕 Cambiar estado de formato a RENDIDO
-    await FormatoEmision.actualizar(formato_emision_id, { estado_emision: 'RENDIDO' });
 
     return res.status(201).json({
       success: true,
-      message: '✅ Rendición creada correctamente',
+      message: modo === 'actualizar' ? '✅ Rendición actualizada correctamente' : '✅ Rendición creada correctamente',
       rendicion: {
         formato_emision_id: formato_emision_id,
         comprobantes_guardados: comprobantesGuardados.length,
-        total_monto: comprobantesGuardados.reduce((sum, c) => sum + (c.monto || 0), 0),
+        total_monto: totalMonto,
+        id: comprobantesGuardados[0]?.id || null,
       },
     });
   } catch (error) {
@@ -130,11 +246,14 @@ exports.obtenerPorFormato = async (req, res) => {
     }
 
     const rendiciones = await Rendicion.listarPorFormato(formato_emision_id);
+    const rutas = await Ruta.listarPorFormato(formato_emision_id);  // 🆕 Obtener rutas
     
     return res.json({ 
       success: true,
       rendiciones: rendiciones || [],
+      rutas: rutas || [],  // 🆕 Incluir rutas en respuesta
       total: (rendiciones || []).length,
+      totalRutas: (rutas || []).length,  // 🆕 Cantidad de rutas
     });
   } catch (error) {
     console.error('❌ Error en obtenerPorFormato:', error);

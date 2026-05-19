@@ -10,6 +10,8 @@ const { ejecutarMigraciones, ejecutarMigracionesFormatoEmisiones, ejecutarMigrac
 const { crearTablasRendicionesMaestras } = require('./migrations/004_crear_rendiciones_maestras');
 const { crearTablaRendicionComprobantes } = require('./migrations/007_crear_rendicion_comprobantes');
 const { agregarRendidoEnum } = require('./migrations/008_agregar_rendido_enum_estado_emision');
+const { agregarOrdenRendiciones } = require('./migrations/009_agregar_orden_rendiciones');
+const { crearTablaRutas } = require('./migrations/010_crear_tabla_rutas');
 const authRoutes = require('./routes/auth');
 const comisionesRoutes = require('./routes/comisiones');
 const aprobacionesRoutes = require('./routes/aprobaciones');
@@ -22,6 +24,7 @@ const rendicionesRoutes = require('./routes/rendiciones');
 const tipoComprobanteRoutes = require('./routes/tipoComprobante');
 const proveedorRoutes = require('./routes/proveedor');
 const decolectaRoutes = require('./routes/decolecta');
+const rutasRoutes = require('./routes/rutas');
 
 const app = express();
 
@@ -47,6 +50,7 @@ app.use('/api/certificaciones-credito', certificacionesRoutes);
 app.use('/api/formato-emisiones/correlativo-control', correlativoControlRoutes);
 app.use('/api/comprobantes', comprobantesRoutes);
 app.use('/api/rendiciones', rendicionesRoutes);
+app.use('/api/rutas', rutasRoutes);
 
 // Ruta de prueba
 app.get('/api/health', (req, res) => {
@@ -155,7 +159,15 @@ const startServer = async () => {
     await crearTablaRendicionComprobantes(pool);
     
     // 🆕 Agregar RENDIDO al ENUM estado_emision
-    await agregarRendidoEnum(pool);    // 🆕 Actualizar iniciales de usuarios
+    await agregarRendidoEnum(pool);
+    
+    // 🆕 Agregar columna orden para mantener orden de comprobantes
+    await agregarOrdenRendiciones(pool);
+    
+    // 🆕 Crear tabla rutas para registrar viajes
+    await crearTablaRutas(pool);
+    
+    // 🆕 Actualizar iniciales de usuarios
     await actualizarInicialesUsuarios(pool);
     
     // 🆕 Generar correlativo automáticos para los usuarios
