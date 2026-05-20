@@ -74,6 +74,17 @@ class FormatoEmision {
 
       const formato = formatos[0];
 
+      // 🆕 Convertir fecha_rendicion a cadena para evitar conversión automática a UTC
+      if (formato.fecha_rendicion instanceof Date) {
+        const año = formato.fecha_rendicion.getFullYear();
+        const mes = String(formato.fecha_rendicion.getMonth() + 1).padStart(2, '0');
+        const día = String(formato.fecha_rendicion.getDate()).padStart(2, '0');
+        const horas = String(formato.fecha_rendicion.getHours()).padStart(2, '0');
+        const minutos = String(formato.fecha_rendicion.getMinutes()).padStart(2, '0');
+        const segundos = String(formato.fecha_rendicion.getSeconds()).padStart(2, '0');
+        formato.fecha_rendicion = `${año}-${mes}-${día} ${horas}:${minutos}:${segundos}`;
+      }
+
       // Obtener detalles del formato
       const [detalles] = await pool.query(
         `SELECT fed.id, 
@@ -185,7 +196,8 @@ class FormatoEmision {
       observacion,
       numero_documento,
       fecha_emision,
-      estado_emision
+      estado_emision,
+      fecha_rendicion  // 🆕 FECHA DE RENDICIÓN
     } = data;
 
     try {
@@ -215,7 +227,8 @@ class FormatoEmision {
       if (observacion !== undefined) { campos.push('observacion = ?'); valores.push(observacion); }
       if (numero_documento !== undefined) { campos.push('numero_documento = ?'); valores.push(numero_documento); }
       if (estado_emision !== undefined) { campos.push('estado_emision = ?'); valores.push(estado_emision); }
-      
+      if (fecha_rendicion !== undefined) { campos.push('fecha_rendicion = ?'); valores.push(fecha_rendicion); }  // 🆕 FECHA DE RENDICIÓN
+
       // 🆕 Siempre actualizar el timestamp
       campos.push('actualizado_en = CURRENT_TIMESTAMP');
       

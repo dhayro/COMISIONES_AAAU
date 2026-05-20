@@ -93,8 +93,32 @@ exports.crearRendicion = async (req, res) => {
         }
       }
 
-      // Mantener estado en RENDIDO
-      await FormatoEmision.actualizar(formato_emision_id, { estado_emision: 'RENDIDO' });
+      // Mantener estado en RENDIDO y actualizar fecha_rendicion
+      const { fecha_rendicion } = req.body;
+      // 🆕 Si no viene fecha_rendicion, usar fecha actual de Lima (UTC-5)
+      let fechaRendicionFinal = fecha_rendicion;
+      if (!fechaRendicionFinal) {
+        const ahora = new Date();
+        const offsetLocal = ahora.getTimezoneOffset(); // en minutos
+        const offsetLima = 300; // Lima UTC-5 (300 minutos atrás de UTC)
+        const diferencia = (offsetLocal - offsetLima) * 60 * 1000;
+        const fechaLima = new Date(ahora.getTime() + diferencia);
+
+        // Formatear manualmente usando hora local ajustada
+        const año = fechaLima.getFullYear();
+        const mes = String(fechaLima.getMonth() + 1).padStart(2, '0');
+        const día = String(fechaLima.getDate()).padStart(2, '0');
+        const horas = String(fechaLima.getHours()).padStart(2, '0');
+        const minutos = String(fechaLima.getMinutes()).padStart(2, '0');
+        const segundos = String(fechaLima.getSeconds()).padStart(2, '0');
+        const ms = String(fechaLima.getMilliseconds()).padStart(3, '0');
+        fechaRendicionFinal = `${año}-${mes}-${día} ${horas}:${minutos}:${segundos}`;
+      }
+
+      await FormatoEmision.actualizar(formato_emision_id, {
+        estado_emision: 'RENDIDO',
+        fecha_rendicion: fechaRendicionFinal
+      });
       console.log('📋 Estado del formato mantenido en RENDIDO');
 
       // 🆕 Actualizar rutas si existen
@@ -152,8 +176,32 @@ exports.crearRendicion = async (req, res) => {
         totalMonto += parseFloat(comprobante.monto) || 0;
       }
 
-      // 🆕 Cambiar estado de formato a RENDIDO
-      await FormatoEmision.actualizar(formato_emision_id, { estado_emision: 'RENDIDO' });
+      // 🆕 Cambiar estado de formato a RENDIDO y guardar fecha_rendicion
+      const { fecha_rendicion } = req.body;
+      // 🆕 Si no viene fecha_rendicion, usar fecha actual de Lima (UTC-5)
+      let fechaRendicionFinal = fecha_rendicion;
+      if (!fechaRendicionFinal) {
+        const ahora = new Date();
+        const offsetLocal = ahora.getTimezoneOffset(); // en minutos
+        const offsetLima = 300; // Lima UTC-5 (300 minutos atrás de UTC)
+        const diferencia = (offsetLocal - offsetLima) * 60 * 1000;
+        const fechaLima = new Date(ahora.getTime() + diferencia);
+
+        // Formatear manualmente usando hora local ajustada
+        const año = fechaLima.getFullYear();
+        const mes = String(fechaLima.getMonth() + 1).padStart(2, '0');
+        const día = String(fechaLima.getDate()).padStart(2, '0');
+        const horas = String(fechaLima.getHours()).padStart(2, '0');
+        const minutos = String(fechaLima.getMinutes()).padStart(2, '0');
+        const segundos = String(fechaLima.getSeconds()).padStart(2, '0');
+        const ms = String(fechaLima.getMilliseconds()).padStart(3, '0');
+        fechaRendicionFinal = `${año}-${mes}-${día} ${horas}:${minutos}:${segundos}`;
+      }
+
+      await FormatoEmision.actualizar(formato_emision_id, {
+        estado_emision: 'RENDIDO',
+        fecha_rendicion: fechaRendicionFinal
+      });
       console.log('✅ Formato cambiado a estado RENDIDO');
 
       // 🆕 Guardar rutas si existen
