@@ -4,7 +4,9 @@
       "Bash(npm ls *)",
       "Bash(npm start *)",
       "Bash(awk '/const generarAnexo03/,/^  const generarAnexo/ {print NR\": \"$0}' material-dashboard-react/src/pages/Gestion/EmisionFormatos.js)",
-      "Bash(awk '/const generarAnexo03/,/^  const generarAnexo/ {if \\(/columnStyles:/\\) print NR\": \"$0}' material-dashboard-react/src/pages/Gestion/EmisionFormatos.js)"
+      "Bash(awk '/const generarAnexo03/,/^  const generarAnexo/ {if \\(/columnStyles:/\\) print NR\": \"$0}' material-dashboard-react/src/pages/Gestion/EmisionFormatos.js)",
+      "Bash(npm run *)",
+      "Bash(git add *)"
     ]
   }
 }
