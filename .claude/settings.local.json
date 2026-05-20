@@ -6,7 +6,10 @@
       "Bash(awk '/const generarAnexo03/,/^  const generarAnexo/ {print NR\": \"$0}' material-dashboard-react/src/pages/Gestion/EmisionFormatos.js)",
       "Bash(awk '/const generarAnexo03/,/^  const generarAnexo/ {if \\(/columnStyles:/\\) print NR\": \"$0}' material-dashboard-react/src/pages/Gestion/EmisionFormatos.js)",
       "Bash(npm run *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git config *)",
+      "Bash(git commit *)",
+      "Bash(Find \"d:\\\\COMISIONES_AAAU\\\\backend\" -type f -name \"*formato*\" -o -name \"*controller*\")"
     ]
   }
 }

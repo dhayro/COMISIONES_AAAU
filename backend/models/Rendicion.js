@@ -1,5 +1,37 @@
 const { pool } = require('../config/database');
 
+// 🆕 Función auxiliar para convertir fechas a hora de Lima (UTC-5)
+const convertirAHoraLima = (fecha) => {
+  if (!fecha) return fecha;
+  try {
+    // Si es un objeto Date, convertir a string ISO
+    if (fecha instanceof Date) {
+      fecha = fecha.toISOString();
+    }
+
+    // Parsear fecha ISO: "2026-05-20T01:47:00.000Z"
+    if (typeof fecha === 'string' && fecha.includes('T')) {
+      const fechaUTC = new Date(fecha);
+      const milisegundos5Horas = 5 * 60 * 60 * 1000;
+      const fechaLima = new Date(fechaUTC.getTime() - milisegundos5Horas);
+
+      // Formatear como: "2026-05-19 20:47:00"
+      const año = fechaLima.getUTCFullYear();
+      const mes = String(fechaLima.getUTCMonth() + 1).padStart(2, '0');
+      const día = String(fechaLima.getUTCDate()).padStart(2, '0');
+      const horas = String(fechaLima.getUTCHours()).padStart(2, '0');
+      const minutos = String(fechaLima.getUTCMinutes()).padStart(2, '0');
+      const segundos = String(fechaLima.getUTCSeconds()).padStart(2, '0');
+
+      return `${año}-${mes}-${día} ${horas}:${minutos}:${segundos}`;
+    }
+    return fecha;
+  } catch (error) {
+    console.warn('⚠️ Error al convertir fecha a Lima:', error);
+    return fecha;
+  }
+};
+
 class Rendicion {
   /**
    * 📝 Crear rendición (nueva tabla principal)
@@ -62,7 +94,16 @@ class Rendicion {
         [id]
       );
 
-      return rows[0] || null;
+      if (rows.length === 0) return null;
+
+      // 🆕 Convertir fechas a hora de Lima
+      const row = rows[0];
+      return {
+        ...row,
+        fecha_comprobante: convertirAHoraLima(row.fecha_comprobante),
+        creado_en: convertirAHoraLima(row.creado_en),
+        actualizado_en: convertirAHoraLima(row.actualizado_en)
+      };
     } catch (error) {
       console.error('❌ Error en Rendicion.obtenerPorId:', error);
       throw error;
@@ -80,7 +121,7 @@ class Rendicion {
       connection = await pool.getConnection();
 
       const [rows] = await connection.query(
-        `SELECT 
+        `SELECT
           r.*,
           fed.clasificador_id,
           fed.monto as monto_original,
@@ -93,7 +134,13 @@ class Rendicion {
         [comprobante_id]
       );
 
-      return rows;
+      // 🆕 Convertir fechas a hora de Lima
+      return rows.map(row => ({
+        ...row,
+        fecha_comprobante: convertirAHoraLima(row.fecha_comprobante),
+        creado_en: convertirAHoraLima(row.creado_en),
+        actualizado_en: convertirAHoraLima(row.actualizado_en)
+      }));
     } catch (error) {
       console.error('❌ Error en Rendicion.listarPorComprobante:', error);
       throw error;
@@ -135,7 +182,13 @@ class Rendicion {
 
       const [rows] = await connection.query(query, params);
 
-      return rows;
+      // 🆕 Convertir fechas a hora de Lima
+      return rows.map(row => ({
+        ...row,
+        fecha_comprobante: convertirAHoraLima(row.fecha_comprobante),
+        creado_en: convertirAHoraLima(row.creado_en),
+        actualizado_en: convertirAHoraLima(row.actualizado_en)
+      }));
     } catch (error) {
       console.error('❌ Error en Rendicion.listarPorFormato:', error);
       throw error;
@@ -259,7 +312,16 @@ class Rendicion {
         [id]
       );
 
-      return rows[0] || null;
+      if (rows.length === 0) return null;
+
+      // 🆕 Convertir fechas a hora de Lima
+      const row = rows[0];
+      return {
+        ...row,
+        fecha_comprobante: convertirAHoraLima(row.fecha_comprobante),
+        creado_en: convertirAHoraLima(row.creado_en),
+        actualizado_en: convertirAHoraLima(row.actualizado_en)
+      };
     } catch (error) {
       console.error('❌ Error en Rendicion.obtenerConDetalles:', error);
       throw error;
@@ -368,7 +430,7 @@ class Rendicion {
 
       // Obtener todos los comprobantes
       const [comprobantes] = await connection.query(
-        `SELECT 
+        `SELECT
           rc.*,
           tc.nombre as tipo_comprobante_nombre,
           p.razon_social as proveedor_nombre,
@@ -385,10 +447,21 @@ class Rendicion {
         [rendicion_id]
       );
 
+      // 🆕 Convertir fechas a hora de Lima
+      const comprobantesConFechas = comprobantes.map(c => ({
+        ...c,
+        fecha_comprobante: convertirAHoraLima(c.fecha_comprobante),
+        creado_en: convertirAHoraLima(c.creado_en),
+        actualizado_en: convertirAHoraLima(c.actualizado_en)
+      }));
+
       return {
         ...rendicion,
-        comprobantes: comprobantes,
-        total_monto: comprobantes.reduce((sum, c) => sum + (c.monto || 0), 0),
+        fecha_rendicion: convertirAHoraLima(rendicion.fecha_rendicion),
+        creado_en: convertirAHoraLima(rendicion.creado_en),
+        actualizado_en: convertirAHoraLima(rendicion.actualizado_en),
+        comprobantes: comprobantesConFechas,
+        total_monto: comprobantesConFechas.reduce((sum, c) => sum + (c.monto || 0), 0),
       };
     } catch (error) {
       console.error('❌ Error en Rendicion.obtenerRendicionCompleta:', error);

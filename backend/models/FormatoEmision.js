@@ -1,5 +1,37 @@
 const { pool } = require('../config/database');
 
+// 🆕 Función auxiliar para convertir fechas a hora de Lima (UTC-5)
+const convertirAHoraLima = (fecha) => {
+  if (!fecha) return fecha;
+  try {
+    // Si es un objeto Date, convertir a string ISO
+    if (fecha instanceof Date) {
+      fecha = fecha.toISOString();
+    }
+
+    // Parsear fecha ISO: "2026-05-20T01:47:00.000Z"
+    if (typeof fecha === 'string' && fecha.includes('T')) {
+      const fechaUTC = new Date(fecha);
+      const milisegundos5Horas = 5 * 60 * 60 * 1000;
+      const fechaLima = new Date(fechaUTC.getTime() - milisegundos5Horas);
+
+      // Formatear como: "2026-05-19 20:47:00"
+      const año = fechaLima.getUTCFullYear();
+      const mes = String(fechaLima.getUTCMonth() + 1).padStart(2, '0');
+      const día = String(fechaLima.getUTCDate()).padStart(2, '0');
+      const horas = String(fechaLima.getUTCHours()).padStart(2, '0');
+      const minutos = String(fechaLima.getUTCMinutes()).padStart(2, '0');
+      const segundos = String(fechaLima.getUTCSeconds()).padStart(2, '0');
+
+      return `${año}-${mes}-${día} ${horas}:${minutos}:${segundos}`;
+    }
+    return fecha;
+  } catch (error) {
+    console.warn('⚠️ Error al convertir fecha a Lima:', error);
+    return fecha;
+  }
+};
+
 class FormatoEmision {
   // Crear formato de emisión
   static async crear(data) {
@@ -74,16 +106,11 @@ class FormatoEmision {
 
       const formato = formatos[0];
 
-      // 🆕 Convertir fecha_rendicion a cadena para evitar conversión automática a UTC
-      if (formato.fecha_rendicion instanceof Date) {
-        const año = formato.fecha_rendicion.getFullYear();
-        const mes = String(formato.fecha_rendicion.getMonth() + 1).padStart(2, '0');
-        const día = String(formato.fecha_rendicion.getDate()).padStart(2, '0');
-        const horas = String(formato.fecha_rendicion.getHours()).padStart(2, '0');
-        const minutos = String(formato.fecha_rendicion.getMinutes()).padStart(2, '0');
-        const segundos = String(formato.fecha_rendicion.getSeconds()).padStart(2, '0');
-        formato.fecha_rendicion = `${año}-${mes}-${día} ${horas}:${minutos}:${segundos}`;
-      }
+      // 🆕 Convertir todas las fechas a hora de Lima
+      formato.fecha_emision = convertirAHoraLima(formato.fecha_emision);
+      formato.fecha_salida = convertirAHoraLima(formato.fecha_salida);
+      formato.fecha_retorno = convertirAHoraLima(formato.fecha_retorno);
+      formato.fecha_rendicion = convertirAHoraLima(formato.fecha_rendicion);
 
       // Obtener detalles del formato
       const [detalles] = await pool.query(
@@ -112,7 +139,7 @@ class FormatoEmision {
   static async listar(filtros = {}, usuarioId = null, rol = null, userAmbitoId = null) {
     try {
       let query = `
-        SELECT fe.*, 
+        SELECT fe.*,
                u.nombre as usuario_nombre,
                u.ambito_id,
                a.nombre_corto as ambito_nombre,
@@ -127,6 +154,10 @@ class FormatoEmision {
         LEFT JOIN formato_emisiones_detalles fed ON fe.id = fed.formato_emision_id
         WHERE 1=1
       `;
+
+      // 🆕 Filtrar certificaciones: solo las que NO están TERMINADO, ELIMINADO o ANULADO
+      query += ` AND (fe.certificacion_id IS NULL OR cc.estado_uso NOT IN ('TERMINADO', 'ELIMINADO', 'ANULADO'))`;
+
 
       const params = [];
 
@@ -165,7 +196,15 @@ class FormatoEmision {
       query += ` GROUP BY fe.id ORDER BY fe.fecha_emision DESC`;
 
       const [formatos] = await pool.query(query, params);
-      return formatos;
+
+      // 🆕 Convertir todas las fechas a hora de Lima
+      return formatos.map(formato => ({
+        ...formato,
+        fecha_emision: convertirAHoraLima(formato.fecha_emision),
+        fecha_salida: convertirAHoraLima(formato.fecha_salida),
+        fecha_retorno: convertirAHoraLima(formato.fecha_retorno),
+        fecha_rendicion: convertirAHoraLima(formato.fecha_rendicion)
+      }));
     } catch (error) {
       throw new Error(`Error al listar formatos: ${error.message}`);
     }
