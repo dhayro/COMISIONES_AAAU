@@ -22,6 +22,9 @@ router.put('/:id', comprobantesController.actualizarComprobante);
 // 🗑️ DELETE - Eliminar comprobante
 router.delete('/:id', comprobantesController.eliminarComprobante);
 
+// 🔍 POST - Validar comprobantes
+router.post('/validar', comprobantesController.validarComprobantes);
+
 // 📊 GET - Obtener estadísticas por formato
 router.get('/estadisticas/:formato_emision_id', comprobantesController.obtenerEstadisticas);
 

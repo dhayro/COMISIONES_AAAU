@@ -271,3 +271,70 @@ exports.obtenerEstadisticas = async (req, res) => {
     });
   }
 };
+
+// 🔍 VALIDACIÓN DE COMPROBANTES
+// POST /api/comprobantes/validar
+exports.validarComprobantes = async (req, res) => {
+  try {
+    const { comision_id, comprobantes } = req.body;
+
+    console.log('🟦 [VALIDAR] Iniciando validación de comprobantes:', {
+      comision_id,
+      cantidad: comprobantes?.length,
+    });
+
+    // ✅ Validar datos requeridos
+    if (!comision_id || !comprobantes || !Array.isArray(comprobantes) || comprobantes.length === 0) {
+      return res.status(400).json({
+        error: 'Faltan datos requeridos: comision_id y array de comprobantes',
+      });
+    }
+
+    const comprobantesCreados = [];
+
+    // 📝 Crear cada comprobante
+    for (const comp of comprobantes) {
+      try {
+        // Validar campos del comprobante
+        if (!comp.ruc_emisor || !comp.tipo_comprobante || !comp.numero_comprobante ||
+            !comp.fecha_emision || !comp.total_honorarios) {
+          throw new Error('Campos incompletos en comprobante');
+        }
+
+        // Crear el comprobante con los datos de validación
+        const comprobante = await Comprobante.crear({
+          formato_emision_id: null, // Para validación directa
+          numero_comprobante: comp.numero_comprobante,
+          tipo_comprobante: comp.tipo_comprobante,
+          fecha_comprobante: comp.fecha_emision,
+          proveedor_razon_social: `RUC: ${comp.ruc_emisor}`,
+          proveedor_ruc_dni: comp.ruc_emisor,
+          monto: comp.total_honorarios,
+          estado_validacion: 'VALIDADO',
+          comision_id: comision_id,
+          tipo_documento_receptor: comp.tipo_documento_receptor || 'SIN_DOCUMENTO',
+          numero_documento_receptor: comp.numero_documento_receptor || '',
+        });
+
+        comprobantesCreados.push(comprobante);
+        console.log(`✅ [VALIDAR] Comprobante ${comp.numero_comprobante} creado`);
+      } catch (error) {
+        console.error(`❌ [VALIDAR] Error creando comprobante ${comp.numero_comprobante}:`, error.message);
+        throw error;
+      }
+    }
+
+    console.log(`✅ [VALIDAR] ${comprobantesCreados.length} comprobantes validados exitosamente`);
+    return res.status(201).json({
+      success: true,
+      message: `${comprobantesCreados.length} comprobantes validados exitosamente`,
+      comprobantes: comprobantesCreados,
+    });
+  } catch (error) {
+    console.error('❌ Error en validarComprobantes:', error);
+    return res.status(500).json({
+      error: 'Error al validar comprobantes',
+      details: error.message,
+    });
+  }
+};
