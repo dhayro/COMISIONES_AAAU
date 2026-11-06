@@ -416,3 +416,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Archivos subidos por usuarios (PDFs de certificaciones): no versionar
+backend/uploads/
+/CCP 2658 AAA UCAYALI - MARZO 2026.pdf
