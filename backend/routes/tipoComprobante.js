@@ -11,4 +11,10 @@ router.get('/:id', tipoComprobanteController.obtener);
 // Crear tipo de comprobante
 router.post('/crear', tipoComprobanteController.crear);
 
+// 🆕 Actualizar tipo de comprobante
+router.put('/:id', tipoComprobanteController.actualizar);
+
+// 🆕 Eliminar tipo de comprobante
+router.delete('/:id', tipoComprobanteController.eliminar);
+
 module.exports = router;

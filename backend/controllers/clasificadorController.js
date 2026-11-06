@@ -1,11 +1,13 @@
+const logger = require('../shared/logger');
 const Clasificador = require('../models/Clasificador');
+const { respuestaError500 } = require('../shared/errores');
 
 exports.listar = async (req, res) => {
   try {
     const clasificadores = await Clasificador.listar();
     res.json(clasificadores);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -20,7 +22,7 @@ exports.obtener = async (req, res) => {
 
     res.json(clasificador);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -41,7 +43,7 @@ exports.crear = async (req, res) => {
       descripcion
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -50,8 +52,8 @@ exports.actualizar = async (req, res) => {
     const { id } = req.params;
     const { partida, nombre, descripcion } = req.body;
 
-    console.log('📝 Actualizando clasificador ID:', id);
-    console.log('📋 Datos recibidos:', { partida, nombre, descripcion });
+    logger.info('📝 Actualizando clasificador ID:', id);
+    logger.info('📋 Datos recibidos:', { partida, nombre, descripcion });
 
     // Validar que al menos un campo se proporcione
     if (!partida && !nombre) {
@@ -61,7 +63,7 @@ exports.actualizar = async (req, res) => {
     // Obtener clasificador actual para merge de datos
     const clasificadorActual = await Clasificador.obtenerPorId(id);
     if (!clasificadorActual) {
-      console.log('❌ Clasificador no encontrado con ID:', id);
+      logger.info('❌ Clasificador no encontrado con ID:', id);
       return res.status(404).json({ error: 'Clasificador no encontrado' });
     }
 
@@ -72,19 +74,19 @@ exports.actualizar = async (req, res) => {
       descripcion: descripcion !== undefined ? descripcion : clasificadorActual.descripcion
     };
 
-    console.log('✏️ Datos a actualizar:', datosActualizados);
+    logger.info('✏️ Datos a actualizar:', datosActualizados);
 
     await Clasificador.actualizar(id, datosActualizados);
 
-    console.log('✅ Clasificador actualizado exitosamente');
+    logger.info('✅ Clasificador actualizado exitosamente');
 
     res.json({ 
       mensaje: 'Clasificador actualizado exitosamente',
       clasificador: datosActualizados
     });
   } catch (error) {
-    console.error('❌ Error al actualizar:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al actualizar:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -99,6 +101,6 @@ exports.eliminar = async (req, res) => {
 
     res.json({ mensaje: 'Clasificador eliminado exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };

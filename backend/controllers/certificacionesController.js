@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const pool = require('../config/database').pool;
 
 /**
@@ -54,76 +55,16 @@ const obtenerCertificadosPorMeta = async (req, res) => {
         [metaId]
       );
 
-      console.log(`📜 Certificados encontrados para META ${metaId}:`, certificados.length);
+      logger.info(`📜 Certificados encontrados para META ${metaId}:`, certificados.length);
 
       res.json(certificados || []);
     } finally {
       if (connection) connection.release();
     }
   } catch (error) {
-    console.error('❌ Error al obtener certificados por META:', error.message);
+    logger.error('❌ Error al obtener certificados por META:', error.message);
     res.status(500).json({
       error: 'Error al obtener certificados',
-      detalle: error.message,
-    });
-  }
-};
-
-/**
- * Obtener certificado por ID con todos los detalles
- */
-const obtenerCertificadoPorId = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({
-        error: 'Falta el parámetro id',
-      });
-    }
-
-    let connection;
-    try {
-      connection = await pool.getConnection();
-
-      const [certificados] = await connection.query(
-        `SELECT * FROM certificaciones_credito_detalladas WHERE id = ?`,
-        [id]
-      );
-
-      if (certificados.length === 0) {
-        return res.status(404).json({
-          error: 'Certificado no encontrado',
-        });
-      }
-
-      // Obtener también los detalles (clasificadores)
-      const [detalles] = await connection.query(
-        `SELECT 
-          dcc.id,
-          dcc.clasificador_id,
-          c.nombre as clasificador_nombre,
-          c.partida,
-          dcc.monto,
-          dcc.created_at
-         FROM detalles_certificacion_credito dcc
-         LEFT JOIN clasificadores c ON dcc.clasificador_id = c.id
-         WHERE dcc.certificacion_credito_id = ?
-         ORDER BY dcc.created_at DESC`,
-        [id]
-      );
-
-      const certificado = certificados[0];
-      certificado.detalles = detalles || [];
-
-      res.json(certificado);
-    } finally {
-      if (connection) connection.release();
-    }
-  } catch (error) {
-    console.error('❌ Error al obtener certificado:', error.message);
-    res.status(500).json({
-      error: 'Error al obtener certificado',
       detalle: error.message,
     });
   }
@@ -178,9 +119,9 @@ const obtenerClasificadoresDeCertificacion = async (req, res) => {
         [certificacionId]
       );
 
-      console.log(`📋 Clasificadores encontrados para certificación ${certificacionId}:`, clasificadores.length);
+      logger.info(`📋 Clasificadores encontrados para certificación ${certificacionId}:`, clasificadores.length);
       if (clasificadores.length > 0) {
-        console.log('📋 Primer clasificador:', JSON.stringify(clasificadores[0], null, 2));
+        logger.info('📋 Primer clasificador:', JSON.stringify(clasificadores[0], null, 2));
       }
 
       res.json(clasificadores || []);
@@ -188,7 +129,7 @@ const obtenerClasificadoresDeCertificacion = async (req, res) => {
       if (connection) connection.release();
     }
   } catch (error) {
-    console.error('❌ Error al obtener clasificadores:', error.message);
+    logger.error('❌ Error al obtener clasificadores:', error.message);
     res.status(500).json({
       error: 'Error al obtener clasificadores',
       detalle: error.message,
@@ -198,6 +139,5 @@ const obtenerClasificadoresDeCertificacion = async (req, res) => {
 
 module.exports = {
   obtenerCertificadosPorMeta,
-  obtenerCertificadoPorId,
   obtenerClasificadoresDeCertificacion,
 };

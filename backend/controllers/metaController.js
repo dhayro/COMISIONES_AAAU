@@ -1,37 +1,39 @@
+const logger = require('../shared/logger');
 const Meta = require('../models/Meta');
+const { respuestaError500 } = require('../shared/errores');
 
 exports.listar = async (req, res) => {
   try {
     const rol = req.user?.rol;  // 🆕 Obtener rol del usuario
     const userAmbitoId = req.user?.ambito_id;  // 🆕 Obtener ambito_id del usuario
 
-    console.log(`📍 LISTAR METAS - Rol: ${rol}, Ámbito: ${userAmbitoId}`);
+    logger.info(`📍 LISTAR METAS - Rol: ${rol}, Ámbito: ${userAmbitoId}`);
 
     let metas;
     
     // 🆕 Filtrar según el rol
     if (rol === 'admin') {
       // ADMIN: Ve todas las metas
-      console.log(`🔐 Rol ADMIN: mostrando todas las metas`);
+      logger.info(`🔐 Rol ADMIN: mostrando todas las metas`);
       metas = await Meta.listar();
     } else if ((rol === 'administrativo' || rol === 'jefe') && userAmbitoId) {
       // 🆕 ADMINISTRATIVO y JEFE: Ver solo metas de su ámbito
-      console.log(`🔐 Rol ${rol}: mostrando solo metas del ámbito ${userAmbitoId}`);
+      logger.info(`🔐 Rol ${rol}: mostrando solo metas del ámbito ${userAmbitoId}`);
       metas = await Meta.listarPorAmbito(userAmbitoId);
     } else if (rol === 'usuario' && userAmbitoId) {
       // 🆕 USUARIO: Ver solo metas de su ámbito
-      console.log(`🔐 Rol usuario: mostrando solo metas del ámbito ${userAmbitoId}`);
+      logger.info(`🔐 Rol usuario: mostrando solo metas del ámbito ${userAmbitoId}`);
       metas = await Meta.listarPorAmbito(userAmbitoId);
     } else {
       // 🆕 Sin rol o sin ambito_id: No mostrar nada
-      console.log(`⚠️  Sin rol o sin ambito_id: devolviendo array vacío`);
+      logger.info(`⚠️  Sin rol o sin ambito_id: devolviendo array vacío`);
       metas = [];
     }
 
-    console.log(`✅ Metas a mostrar: ${metas.length}`);
+    logger.info(`✅ Metas a mostrar: ${metas.length}`);
     res.json(metas);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -44,13 +46,13 @@ exports.listarPorAmbito = async (req, res) => {
       return res.status(400).json({ error: 'ambitoId es requerido' });
     }
     
-    console.log(`🔐 Listando metas para ámbito ${ambitoId}`);
+    logger.info(`🔐 Listando metas para ámbito ${ambitoId}`);
     const metas = await Meta.listarPorAmbito(ambitoId);
-    console.log(`✅ Metas encontradas: ${metas.length}`);
+    logger.info(`✅ Metas encontradas: ${metas.length}`);
     
     res.json(metas);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -65,7 +67,7 @@ exports.obtener = async (req, res) => {
 
     res.json(meta);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -91,7 +93,7 @@ exports.crear = async (req, res) => {
         error: `Ya existe una meta con el número ${req.body.numero_meta} para el período ${req.body.periodo}. El número de meta debe ser único dentro de cada período.`,
       });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -130,7 +132,7 @@ exports.actualizar = async (req, res) => {
         error: `Ya existe una meta con el número ${req.body.numero_meta || req.params.numero_meta} para el período ${req.body.periodo}. El número de meta debe ser único dentro de cada período.`,
       });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -151,6 +153,6 @@ exports.eliminar = async (req, res) => {
       res.status(500).json({ error: 'No se pudo eliminar la meta' });
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };

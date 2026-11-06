@@ -1,11 +1,12 @@
 const Ambito = require('../models/Ambito');
+const { respuestaError500 } = require('../shared/errores');
 
 exports.listar = async (req, res) => {
   try {
     const ambitos = await Ambito.listar();
     res.json(ambitos);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -20,7 +21,7 @@ exports.obtener = async (req, res) => {
 
     res.json(ambito);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -29,7 +30,7 @@ exports.listarAAAs = async (req, res) => {
     const aaas = await Ambito.listarAAAs();
     res.json(aaas);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -39,7 +40,7 @@ exports.listarALAsPorAAA = async (req, res) => {
     const alas = await Ambito.listarALAsPorAAA(aaa_id);
     res.json(alas);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -65,7 +66,7 @@ exports.crear = async (req, res) => {
       dependencia_id
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -97,7 +98,7 @@ exports.actualizar = async (req, res) => {
       dependencia_id
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -127,6 +128,6 @@ exports.eliminar = async (req, res) => {
 
     res.json({ mensaje: 'Ámbito eliminado exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };

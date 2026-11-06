@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const comisionController = require('../controllers/comisionController');
+const feriadoController = require('../controllers/feriadoController');
 const ambitoController = require('../controllers/ambitoController');
 const clasificadorController = require('../controllers/clasificadorController');
 const costoViajeController = require('../controllers/costoViajeController');
@@ -1814,6 +1815,26 @@ router.get('/certificaciones-credito/:certificacion_credito_id/detalles', certif
 
 /**
  * @swagger
+ * /certificaciones-credito/{certificacion_credito_id}/formatos:
+ *   get:
+ *     summary: Listar formatos asignados a una certificación con su detalle por partida
+ *     tags: [Detalles Certificación]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: certificacion_credito_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lista de formatos con detalle
+ */
+router.get('/certificaciones-credito/:certificacion_credito_id/formatos', certificacionCreditoController.listarFormatos);
+
+/**
+ * @swagger
  * /detalles-certificacion:
  *   post:
  *     summary: Crear detalle de certificación
@@ -2052,6 +2073,11 @@ router.get('/formatos-emisiones/:id', formatoEmisionController.obtenerPorId);
  *         description: Formato actualizado
  */
 router.put('/formatos-emisiones/:id', formatoEmisionController.actualizar);
+router.patch('/formatos-emisiones/:id/siaf-cut', formatoEmisionController.actualizarSiafCut);
+router.post('/formatos-emisiones/:id/devolucion', formatoEmisionController.registrarDevolucion);
+router.get('/feriados', feriadoController.listar);
+router.post('/feriados', feriadoController.crear);
+router.delete('/feriados/:fecha', feriadoController.eliminar);
 
 /**
  * @swagger

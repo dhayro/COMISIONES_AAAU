@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
@@ -52,7 +53,7 @@ const cargarDatosMaestros = async (connection) => {
     // Cargar ámbitos (AAAs primero, luego ALAs)
     const [ambitos] = await connection.query('SELECT COUNT(*) as count FROM ambitos');
     if (ambitos[0].count === 0) {
-      console.log('\n📥 Cargando ámbitos por defecto...');
+      logger.info('\n📥 Cargando ámbitos por defecto...');
       
       // Insertar AAA UCAYALI (única Autoridad Administrativa)
       let aaa_ucayali_id;
@@ -65,7 +66,7 @@ const cargarDatosMaestros = async (connection) => {
         );
         aaa_ucayali_id = result1.insertId;
       } catch (error) {
-        console.error('❌ Error insertando AAA UCAYALI:', error.message);
+        logger.error('❌ Error insertando AAA UCAYALI:', error.message);
       }
 
       // Insertar ALAs (Autoridades Locales) - dependientes de AAA UCAYALI
@@ -85,17 +86,17 @@ const cargarDatosMaestros = async (connection) => {
           );
         } catch (error) {
           if (error.code !== 'ER_DUP_ENTRY') {
-            console.error(`❌ Error insertando ${ala.nombre_corto}:`, error.message);
+            logger.error(`❌ Error insertando ${ala.nombre_corto}:`, error.message);
           }
         }
       }
-      console.log('✅ 5 ámbitos cargados (1 AAA UCAYALI + 4 ALAs)');
+      logger.info('✅ 5 ámbitos cargados (1 AAA UCAYALI + 4 ALAs)');
     }
 
     // Cargar clasificadores
     const [clasificadores] = await connection.query('SELECT COUNT(*) as count FROM clasificadores');
     if (clasificadores[0].count === 0) {
-      console.log('\n📥 Cargando clasificadores por defecto...');
+      logger.info('\n📥 Cargando clasificadores por defecto...');
       const clasificadoresDefecto = [
         { partida: '23.2.1.2.2', nombre: 'PASAJES Y GASTOS DE TRANSPORTE', descripcion: 'Gastos de transporte y pasajes' },
         { partida: '23.2.1.2.1', nombre: 'VIÁTICOS Y ASIGNACIONES POR COMISIÓN DE SERVICIO', descripcion: 'Viáticos y asignaciones por comisión' },
@@ -112,17 +113,17 @@ const cargarDatosMaestros = async (connection) => {
           );
         } catch (error) {
           if (error.code !== 'ER_DUP_ENTRY') {
-            console.error(`❌ Error insertando ${clasificador.partida}:`, error.message);
+            logger.error(`❌ Error insertando ${clasificador.partida}:`, error.message);
           }
         }
       }
-      console.log(`✅ ${clasificadoresDefecto.length} clasificadores cargados`);
+      logger.info(`✅ ${clasificadoresDefecto.length} clasificadores cargados`);
     }
 
     // Cargar costos de viaje
     const [costos] = await connection.query('SELECT COUNT(*) as count FROM costos_viaje');
     if (costos[0].count === 0) {
-      console.log('\n📥 Cargando costos de viaje por defecto...');
+      logger.info('\n📥 Cargando costos de viaje por defecto...');
       try {
         await connection.query(
           'INSERT INTO costos_viaje (nombre, costo, activo) VALUES (?, ?, 1)',
@@ -132,10 +133,10 @@ const cargarDatosMaestros = async (connection) => {
           'INSERT INTO costos_viaje (nombre, costo, activo) VALUES (?, ?, 1)',
           ['Fuera del ámbito', 320.00]
         );
-        console.log('✅ Costos de viaje cargados: Dentro=220, Fuera=320\n');
+        logger.info('✅ Costos de viaje cargados: Dentro=220, Fuera=320\n');
       } catch (error) {
         if (error.code !== 'ER_DUP_ENTRY') {
-          console.error('❌ Error insertando costos de viaje:', error.message);
+          logger.error('❌ Error insertando costos de viaje:', error.message);
         }
       }
     }
@@ -143,7 +144,7 @@ const cargarDatosMaestros = async (connection) => {
     // Cargar usuarios por defecto DESPUÉS de los ámbitos
     await cargarUsuariosDefecto(connection);
   } catch (error) {
-    console.error('⚠️  Error al cargar datos maestros:', error.message);
+    logger.error('⚠️  Error al cargar datos maestros:', error.message);
   }
 };
 
@@ -154,7 +155,7 @@ const cargarUsuariosDefecto = async (connection) => {
     const [users] = await connection.query('SELECT COUNT(*) as count FROM users');
     
     if (users[0].count === 0) {
-      console.log('\n📥 Cargando 26 usuarios por defecto...');
+      logger.info('\n📥 Cargando 26 usuarios por defecto...');
       
       // Obtener el ID de la AAA UCAYALI
       const [ambitos] = await connection.query(
@@ -177,19 +178,19 @@ const cargarUsuariosDefecto = async (connection) => {
           insertados++;
         } catch (error) {
           if (error.code !== 'ER_DUP_ENTRY') {
-            console.error(`❌ Error insertando ${user.username}:`, error.message);
+            logger.error(`❌ Error insertando ${user.username}:`, error.message);
           }
         }
       }
       
-      console.log(`✅ ${insertados} usuarios cargados exitosamente`);
-      console.log(`📝 Contraseña para todos: Autoridad1`);
-      console.log(`📍 Ámbito asignado a todos: AAA UCAYALI (ID: ${ambito_id})\n`);
+      logger.info(`✅ ${insertados} usuarios cargados exitosamente`);
+      logger.info(`📝 Contraseña para todos: Autoridad1`);
+      logger.info(`📍 Ámbito asignado a todos: AAA UCAYALI (ID: ${ambito_id})\n`);
     } else {
-      console.log(`✅ BD ya contiene usuarios (${users[0].count})`);
+      logger.info(`✅ BD ya contiene usuarios (${users[0].count})`);
     }
   } catch (error) {
-    console.error('⚠️  Error al cargar usuarios por defecto:', error.message);
+    logger.error('⚠️  Error al cargar usuarios por defecto:', error.message);
   }
 };
 
@@ -204,13 +205,13 @@ const initDatabase = async () => {
       password: process.env.DB_PASSWORD || ''
     });
 
-    console.log('✅ Conectado a MySQL');
+    logger.info('✅ Conectado a MySQL');
 
     // Crear BD si no existe
     await tempConnection.query(
       `CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME}`
     );
-    console.log('✅ Base de datos verificada/creada');
+    logger.info('✅ Base de datos verificada/creada');
 
     // Cambiar a la BD
     await tempConnection.query(`USE ${process.env.DB_NAME}`);
@@ -230,7 +231,7 @@ const initDatabase = async () => {
         INDEX idx_dependencia (dependencia_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('✅ Tabla ambitos verificada/creada');
+    logger.info('✅ Tabla ambitos verificada/creada');
 
     // Crear tabla cargos ANTES de users (porque users tiene FK a cargos)
     await tempConnection.query(`
@@ -243,7 +244,7 @@ const initDatabase = async () => {
         INDEX idx_activo (activo)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('✅ Tabla cargos verificada/creada');
+    logger.info('✅ Tabla cargos verificada/creada');
 
     // Crear tabla users DESPUÉS (con FK a ambitos y cargos)
     await tempConnection.query(`
@@ -270,7 +271,7 @@ const initDatabase = async () => {
         INDEX idx_iniciales (iniciales)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('✅ Tabla users verificada/creada');
+    logger.info('✅ Tabla users verificada/creada');
 
     // Crear tabla clasificadores (MAESTRA)
     await tempConnection.query(`
@@ -285,7 +286,7 @@ const initDatabase = async () => {
         INDEX idx_nombre (nombre)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('✅ Tabla clasificadores verificada/creada');
+    logger.info('✅ Tabla clasificadores verificada/creada');
 
     // Crear tabla costos_viaje (MAESTRA)
     await tempConnection.query(`
@@ -298,7 +299,7 @@ const initDatabase = async () => {
         actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('✅ Tabla costos_viaje verificada/creada');
+    logger.info('✅ Tabla costos_viaje verificada/creada');
 
     // Crear tabla metas
     await tempConnection.query(`
@@ -317,7 +318,7 @@ const initDatabase = async () => {
         INDEX idx_periodo (periodo)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('✅ Tabla metas verificada/creada');
+    logger.info('✅ Tabla metas verificada/creada');
 
     // Crear tabla fuentes_financiamiento
     await tempConnection.query(`
@@ -332,7 +333,7 @@ const initDatabase = async () => {
         INDEX idx_activo (activo)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('✅ Tabla fuentes_financiamiento verificada/creada');
+    logger.info('✅ Tabla fuentes_financiamiento verificada/creada');
 
     // Crear tabla comisiones (ACTUALIZADA CON CAMPOS DE APROBACIÓN, METAS Y COSTOS)
     await tempConnection.query(`
@@ -377,7 +378,7 @@ const initDatabase = async () => {
         INDEX idx_fechas (fecha_salida, fecha_retorno)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('✅ Tabla comisiones verificada/creada');
+    logger.info('✅ Tabla comisiones verificada/creada');
 
     // Crear tabla comision_comisionados (DETALLE)
     await tempConnection.query(`
@@ -402,11 +403,11 @@ const initDatabase = async () => {
         UNIQUE KEY unique_comision_usuario_clasificador (comision_id, usuario_id, clasificador_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('✅ Tabla comision_comisionados verificada/creada');
+    logger.info('✅ Tabla comision_comisionados verificada/creada');
 
     // ========== MIGRACIONES ==========
     // Agregar columnas faltantes si no existen (para actualizaciones de BD existentes)
-    console.log('\n🔄 Verificando migraciones necesarias...');
+    logger.info('\n🔄 Verificando migraciones necesarias...');
     
     try {
       // Verificar si meta_id existe en comisiones
@@ -417,7 +418,7 @@ const initDatabase = async () => {
       );
       
       if (metaColumn.length === 0) {
-        console.log('  ➕ Agregando columna meta_id a comisiones...');
+        logger.info('  ➕ Agregando columna meta_id a comisiones...');
         await tempConnection.query(
           `ALTER TABLE comisiones ADD COLUMN meta_id INT, 
            ADD FOREIGN KEY (meta_id) REFERENCES metas(id) ON DELETE SET NULL,
@@ -433,7 +434,7 @@ const initDatabase = async () => {
       );
       
       if (costoColumn.length === 0) {
-        console.log('  ➕ Agregando columna costo_viaje_id a comisiones...');
+        logger.info('  ➕ Agregando columna costo_viaje_id a comisiones...');
         await tempConnection.query(
           `ALTER TABLE comisiones ADD COLUMN costo_viaje_id INT,
            ADD FOREIGN KEY (costo_viaje_id) REFERENCES costos_viaje(id) ON DELETE SET NULL,
@@ -441,10 +442,10 @@ const initDatabase = async () => {
         );
       }
       
-      console.log('✅ Migraciones completadas');
+      logger.info('✅ Migraciones completadas');
     } catch (migrationError) {
       if (migrationError.code !== 'ER_DUP_FIELDNAME' && migrationError.code !== 'ER_KEY_COLUMN_DOES_NOT_EXIST') {
-        console.warn('⚠️  Advertencia en migraciones:', migrationError.message);
+        logger.warn('⚠️  Advertencia en migraciones:', migrationError.message);
       }
     }
 
@@ -452,7 +453,7 @@ const initDatabase = async () => {
     await cargarDatosMaestros(tempConnection);
 
     // Cargar metas por defecto
-    console.log('\n📋 Cargando metas por defecto...');
+    logger.info('\n📋 Cargando metas por defecto...');
     try {
       // Primero obtener los IDs de los ámbitos por nombre
       const [ambitos] = await tempConnection.query(
@@ -496,16 +497,16 @@ const initDatabase = async () => {
             [meta.nombre, meta.numero_meta, meta.periodo, ambitoId]
           );
           const ambitoNombre = meta.ambito.charAt(0).toUpperCase() + meta.ambito.slice(1);
-          console.log(`  ✅ Meta ${meta.numero_meta} - ${ambitoNombre}`);
+          logger.info(`  ✅ Meta ${meta.numero_meta} - ${ambitoNombre}`);
         }
       }
-      console.log('✅ Metas cargadas\n');
+      logger.info('✅ Metas cargadas\n');
     } catch (err) {
-      console.log(`⏭️  Metas ya existen o error menor\n`);
+      logger.info(`⏭️  Metas ya existen o error menor\n`);
     }
 
     // Cargar fuentes de financiamiento por defecto
-    console.log('📊 Cargando fuentes de financiamiento por defecto...');
+    logger.info('📊 Cargando fuentes de financiamiento por defecto...');
     try {
       const fuentesFinanciamiento = [
         { nombre: 'Recursos Ordinarios', abreviatura: 'R.O', descripcion: 'Ingresos ordinarios del estado' },
@@ -524,16 +525,16 @@ const initDatabase = async () => {
             'INSERT INTO fuentes_financiamiento (nombre, abreviatura, descripcion, activo) VALUES (?, ?, ?, 1)',
             [fuente.nombre, fuente.abreviatura, fuente.descripcion]
           );
-          console.log(`  ✅ Fuente: ${fuente.abreviatura} - ${fuente.nombre}`);
+          logger.info(`  ✅ Fuente: ${fuente.abreviatura} - ${fuente.nombre}`);
         }
       }
-      console.log('✅ Fuentes de financiamiento cargadas\n');
+      logger.info('✅ Fuentes de financiamiento cargadas\n');
     } catch (err) {
-      console.log(`⏭️  Fuentes de financiamiento ya existen o error menor\n`);
+      logger.info(`⏭️  Fuentes de financiamiento ya existen o error menor\n`);
     }
 
     // Cargar cargos por defecto
-    console.log('👔 Cargando cargos por defecto...');
+    logger.info('👔 Cargando cargos por defecto...');
     try {
       const cargos = [
         { nombre: 'Gerente' },
@@ -554,18 +555,18 @@ const initDatabase = async () => {
             'INSERT INTO cargos (nombre, activo) VALUES (?, 1)',
             [cargo.nombre]
           );
-          console.log(`  ✅ Cargo: ${cargo.nombre}`);
+          logger.info(`  ✅ Cargo: ${cargo.nombre}`);
         }
       }
-      console.log('✅ Cargos cargados\n');
+      logger.info('✅ Cargos cargados\n');
     } catch (err) {
-      console.log(`⏭️  Cargos ya existen o error menor\n`);
+      logger.info(`⏭️  Cargos ya existen o error menor\n`);
     }
 
     await tempConnection.end();
     return true;
   } catch (error) {
-    console.error('❌ Error al conectar a BD:', error.message);
+    logger.error('❌ Error al conectar a BD:', error.message);
     if (tempConnection) await tempConnection.end();
     
     // Lanzar error para que el servidor no inicie sin BD

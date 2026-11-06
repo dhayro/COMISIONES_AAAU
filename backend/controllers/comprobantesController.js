@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const Comprobante = require('../models/Comprobante');
 const ComprobanteDetalle = require('../models/ComprobanteDetalle');
 const FormatoEmision = require('../models/FormatoEmision');
@@ -21,7 +22,7 @@ exports.crearComprobante = async (req, res) => {
       detalles, // Array de {tipo_viatitico, cantidad, descripcion}
     } = req.body;
 
-    console.log('🟦 [RENDICION] Creando comprobante:', {
+    logger.info('🟦 [RENDICION] Creando comprobante:', {
       formato_emision_id,
       numero_comprobante,
       tipo_comprobante,
@@ -61,20 +62,20 @@ exports.crearComprobante = async (req, res) => {
     // 📝 Si hay detalles (VIÁTICO), crearlos
     if (detalles && Array.isArray(detalles) && detalles.length > 0) {
       await ComprobanteDetalle.crearDetalles(comprobante.id, detalles);
-      console.log(`✅ [RENDICION] ${detalles.length} detalles de viático creados`);
+      logger.info(`✅ [RENDICION] ${detalles.length} detalles de viático creados`);
     }
 
     // 🔄 Obtener comprobante con detalles
     const comprobanteConDetalles = await Comprobante.obtenerConDetalles(comprobante.id);
 
-    console.log('✅ [RENDICION] Comprobante creado exitosamente:', comprobante.id);
+    logger.info('✅ [RENDICION] Comprobante creado exitosamente:', comprobante.id);
     return res.status(201).json({
       success: true,
       message: 'Comprobante creado exitosamente',
       comprobante: comprobanteConDetalles,
     });
   } catch (error) {
-    console.error('❌ Error en crearComprobante:', error);
+    logger.error('❌ Error en crearComprobante:', error);
     return res.status(500).json({
       error: 'Error al crear comprobante',
       details: error.message,
@@ -92,7 +93,7 @@ exports.listarComprobantes = async (req, res) => {
     if (estado_rendicion) filtros.estado_rendicion = estado_rendicion;
     if (tipo_comprobante) filtros.tipo_comprobante = tipo_comprobante;
 
-    console.log('🟦 [RENDICION] Listando comprobantes con filtros:', filtros);
+    logger.info('🟦 [RENDICION] Listando comprobantes con filtros:', filtros);
 
     const comprobantes = await Comprobante.listar(filtros);
 
@@ -104,13 +105,13 @@ exports.listarComprobantes = async (req, res) => {
       }))
     );
 
-    console.log(`✅ [RENDICION] ${comprobanteConDetalles.length} comprobantes encontrados`);
+    logger.info(`✅ [RENDICION] ${comprobanteConDetalles.length} comprobantes encontrados`);
     return res.status(200).json({
       success: true,
       comprobantes: comprobanteConDetalles,
     });
   } catch (error) {
-    console.error('❌ Error en listarComprobantes:', error);
+    logger.error('❌ Error en listarComprobantes:', error);
     return res.status(500).json({
       error: 'Error al listar comprobantes',
       details: error.message,
@@ -129,13 +130,13 @@ exports.obtenerComprobante = async (req, res) => {
       return res.status(404).json({ error: 'Comprobante no encontrado' });
     }
 
-    console.log(`✅ [RENDICION] Comprobante ${id} obtenido`);
+    logger.info(`✅ [RENDICION] Comprobante ${id} obtenido`);
     return res.status(200).json({
       success: true,
       comprobante,
     });
   } catch (error) {
-    console.error('❌ Error en obtenerComprobante:', error);
+    logger.error('❌ Error en obtenerComprobante:', error);
     return res.status(500).json({
       error: 'Error al obtener comprobante',
       details: error.message,
@@ -159,7 +160,7 @@ exports.actualizarComprobante = async (req, res) => {
       detalles,
     } = req.body;
 
-    console.log('🟦 [RENDICION] Actualizando comprobante:', id);
+    logger.info('🟦 [RENDICION] Actualizando comprobante:', id);
 
     // Verificar que existe
     const comprobanteAnterior = await Comprobante.obtenerPorId(id);
@@ -187,14 +188,14 @@ exports.actualizarComprobante = async (req, res) => {
 
     const comprobanteActualizado = await Comprobante.obtenerConDetalles(id);
 
-    console.log(`✅ [RENDICION] Comprobante ${id} actualizado`);
+    logger.info(`✅ [RENDICION] Comprobante ${id} actualizado`);
     return res.status(200).json({
       success: true,
       message: 'Comprobante actualizado exitosamente',
       comprobante: comprobanteActualizado,
     });
   } catch (error) {
-    console.error('❌ Error en actualizarComprobante:', error);
+    logger.error('❌ Error en actualizarComprobante:', error);
     return res.status(500).json({
       error: 'Error al actualizar comprobante',
       details: error.message,
@@ -207,7 +208,7 @@ exports.eliminarComprobante = async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log('🟦 [RENDICION] Eliminando comprobante:', id);
+    logger.info('🟦 [RENDICION] Eliminando comprobante:', id);
 
     // Verificar que existe
     const comprobante = await Comprobante.obtenerPorId(id);
@@ -218,13 +219,13 @@ exports.eliminarComprobante = async (req, res) => {
     // Eliminar
     await Comprobante.eliminar(id);
 
-    console.log(`✅ [RENDICION] Comprobante ${id} eliminado`);
+    logger.info(`✅ [RENDICION] Comprobante ${id} eliminado`);
     return res.status(200).json({
       success: true,
       message: 'Comprobante eliminado exitosamente',
     });
   } catch (error) {
-    console.error('❌ Error en eliminarComprobante:', error);
+    logger.error('❌ Error en eliminarComprobante:', error);
     return res.status(500).json({
       error: 'Error al eliminar comprobante',
       details: error.message,
@@ -255,7 +256,7 @@ exports.obtenerEstadisticas = async (req, res) => {
         [formato_emision_id]
       );
 
-      console.log(`✅ [RENDICION] Estadísticas obtenidas para formato ${formato_emision_id}`);
+      logger.info(`✅ [RENDICION] Estadísticas obtenidas para formato ${formato_emision_id}`);
       return res.status(200).json({
         success: true,
         estadisticas: stats[0],
@@ -264,7 +265,7 @@ exports.obtenerEstadisticas = async (req, res) => {
       if (connection) connection.release();
     }
   } catch (error) {
-    console.error('❌ Error en obtenerEstadisticas:', error);
+    logger.error('❌ Error en obtenerEstadisticas:', error);
     return res.status(500).json({
       error: 'Error al obtener estadísticas',
       details: error.message,
@@ -278,7 +279,7 @@ exports.validarComprobantes = async (req, res) => {
   try {
     const { comision_id, comprobantes } = req.body;
 
-    console.log('🟦 [VALIDAR] Iniciando validación de comprobantes:', {
+    logger.info('🟦 [VALIDAR] Iniciando validación de comprobantes:', {
       comision_id,
       cantidad: comprobantes?.length,
     });
@@ -317,21 +318,21 @@ exports.validarComprobantes = async (req, res) => {
         });
 
         comprobantesCreados.push(comprobante);
-        console.log(`✅ [VALIDAR] Comprobante ${comp.numero_comprobante} creado`);
+        logger.info(`✅ [VALIDAR] Comprobante ${comp.numero_comprobante} creado`);
       } catch (error) {
-        console.error(`❌ [VALIDAR] Error creando comprobante ${comp.numero_comprobante}:`, error.message);
+        logger.error(`❌ [VALIDAR] Error creando comprobante ${comp.numero_comprobante}:`, error.message);
         throw error;
       }
     }
 
-    console.log(`✅ [VALIDAR] ${comprobantesCreados.length} comprobantes validados exitosamente`);
+    logger.info(`✅ [VALIDAR] ${comprobantesCreados.length} comprobantes validados exitosamente`);
     return res.status(201).json({
       success: true,
       message: `${comprobantesCreados.length} comprobantes validados exitosamente`,
       comprobantes: comprobantesCreados,
     });
   } catch (error) {
-    console.error('❌ Error en validarComprobantes:', error);
+    logger.error('❌ Error en validarComprobantes:', error);
     return res.status(500).json({
       error: 'Error al validar comprobantes',
       details: error.message,

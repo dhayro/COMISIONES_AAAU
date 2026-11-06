@@ -1,50 +1,51 @@
+const logger = require('../shared/logger');
 const fs = require('fs');
 const path = require('path');
 
 const ejecutarMigraciones = async (pool) => {
-  console.log('Verificando migraciones de certificaciones...');
+  logger.info('Verificando migraciones de certificaciones...');
 };
 
 const ejecutarMigracionesFormatoEmisiones = async (pool) => {
-  console.log('Verificando migraciones de formato_emisiones...');
+  logger.info('Verificando migraciones de formato_emisiones...');
 };
 
 const ejecutarMigracionesEstadoCertificado = async (pool) => {
-  console.log('Verificando estado_uso...');
+  logger.info('Verificando estado_uso...');
 };
 
 const corregirEstadoUsoEnum = async (pool) => {
-  console.log('Verificando ENUM...');
+  logger.info('Verificando ENUM...');
 };
 
 const agregarCertificacionId = async (pool) => {
-  console.log('Verificando certificacion_id...');
+  logger.info('Verificando certificacion_id...');
 };
 
 const agregarMontoUtilizado = async (pool) => {
-  console.log('Verificando monto_utilizado...');
+  logger.info('Verificando monto_utilizado...');
 };
 
 const sincronizarMontoUtilizado = async (pool) => {
   let connection;
   try {
-    console.log('🔄 Sincronizando montos utilizados en certificaciones...');
+    logger.info('🔄 Sincronizando montos utilizados en certificaciones...');
     connection = await pool.getConnection();
     
     // 1️⃣ DEBUG: Ver qué hay en formato_emisiones_detalles
-    console.log('\n📋 DEBUG: Contenido de formato_emisiones_detalles:');
+    logger.info('\n📋 DEBUG: Contenido de formato_emisiones_detalles:');
     const [detallesDebug] = await connection.query(
       `SELECT fed.id, fed.formato_emision_id, fed.clasificador_id, fed.monto, fed.detalles_certificacion_credito_id
        FROM formato_emisiones_detalles fed
        LIMIT 10`
     );
-    console.log('  Primeros 10 registros:');
+    logger.info('  Primeros 10 registros:');
     for (const det of detallesDebug) {
-      console.log(`    ID: ${det.id}, Formato: ${det.formato_emision_id}, Clasificador: ${det.clasificador_id}, Monto: ${det.monto}, Det_Cert_ID: ${det.detalles_certificacion_credito_id}`);
+      logger.info(`    ID: ${det.id}, Formato: ${det.formato_emision_id}, Clasificador: ${det.clasificador_id}, Monto: ${det.monto}, Det_Cert_ID: ${det.detalles_certificacion_credito_id}`);
     }
     
     // 2️⃣ Primero, mapear los detalles_certificacion_credito_id si están NULL
-    console.log('\n  📋 Mapeando detalles_certificacion_credito_id...');
+    logger.info('\n  📋 Mapeando detalles_certificacion_credito_id...');
     const [mapResult] = await connection.query(
       `UPDATE formato_emisiones_detalles fed
        SET fed.detalles_certificacion_credito_id = (
@@ -60,26 +61,26 @@ const sincronizarMontoUtilizado = async (pool) => {
            SELECT fe.id FROM formato_emisiones fe WHERE fe.certificacion_id IS NOT NULL
          )`
     );
-    console.log(`  ✓ Mapeo completado: ${mapResult.affectedRows} registros actualizados`);
+    logger.info(`  ✓ Mapeo completado: ${mapResult.affectedRows} registros actualizados`);
     
     // 3️⃣ DEBUG: Ver nuevamente después del mapeo
-    console.log('\n📋 DEBUG: Después del mapeo:');
+    logger.info('\n📋 DEBUG: Después del mapeo:');
     const [detallesDebug2] = await connection.query(
       `SELECT fed.id, fed.formato_emision_id, fed.clasificador_id, fed.monto, fed.detalles_certificacion_credito_id
        FROM formato_emisiones_detalles fed
        WHERE fed.monto > 0
        LIMIT 10`
     );
-    console.log(`  Encontrados ${detallesDebug2.length} registros con monto > 0:`);
+    logger.info(`  Encontrados ${detallesDebug2.length} registros con monto > 0:`);
     for (const det of detallesDebug2) {
-      console.log(`    ID: ${det.id}, Formato: ${det.formato_emision_id}, Clasificador: ${det.clasificador_id}, Monto: ${det.monto}, Det_Cert_ID: ${det.detalles_certificacion_credito_id}`);
+      logger.info(`    ID: ${det.id}, Formato: ${det.formato_emision_id}, Clasificador: ${det.clasificador_id}, Monto: ${det.monto}, Det_Cert_ID: ${det.detalles_certificacion_credito_id}`);
     }
     
     // 4️⃣ Resetear todos los montos_utilizados a 0
     await connection.query(
       `UPDATE detalles_certificacion_credito SET monto_utilizado = 0`
     );
-    console.log('  ✓ Montos utilizados resetados a 0');
+    logger.info('  ✓ Montos utilizados resetados a 0');
     
     // 5️⃣ Obtener todas las certificaciones con detalles
     const [certificaciones] = await connection.query(
@@ -88,7 +89,7 @@ const sincronizarMontoUtilizado = async (pool) => {
        WHERE dcc.certificacion_credito_id IS NOT NULL`
     );
     
-    console.log(`\n  📊 Encontradas ${certificaciones.length} lineas de detalles certificación`);
+    logger.info(`\n  📊 Encontradas ${certificaciones.length} lineas de detalles certificación`);
     
     // 6️⃣ Para cada detalle de certificación, sumar todos los formatos asociados
     let actualizadas = 0;
@@ -113,17 +114,17 @@ const sincronizarMontoUtilizado = async (pool) => {
         );
         
         if (montoTotal > 0 || cantDetalles > 0) {
-          console.log(`    ✓ Detalle ${detalle.id} (Cert ${detalle.certificacion_credito_id}): Monto=${montoTotal}, Cantidad Detalles=${cantDetalles}`);
+          logger.info(`    ✓ Detalle ${detalle.id} (Cert ${detalle.certificacion_credito_id}): Monto=${montoTotal}, Cantidad Detalles=${cantDetalles}`);
           actualizadas++;
         }
       } catch (error) {
-        console.error(`    ❌ Error procesando detalle ${detalle.id}:`, error.message);
+        logger.error(`    ❌ Error procesando detalle ${detalle.id}:`, error.message);
       }
     }
     
-    console.log(`  ✅ Sincronización completada: ${actualizadas} detalles procesados\n`);
+    logger.info(`  ✅ Sincronización completada: ${actualizadas} detalles procesados\n`);
   } catch (error) {
-    console.error('⚠️ Error sincronizando montos utilizados:', error.message);
+    logger.error('⚠️ Error sincronizando montos utilizados:', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -132,14 +133,14 @@ const sincronizarMontoUtilizado = async (pool) => {
 const revalidarSistema = async (pool) => {
   let connection;
   try {
-    console.log('\n╔════════════════════════════════════════════════════╗');
-    console.log('║   🔄 REVALIDACIÓN COMPLETA DEL SISTEMA             ║');
-    console.log('╚════════════════════════════════════════════════════╝\n');
+    logger.info('\n╔════════════════════════════════════════════════════╗');
+    logger.info('║   🔄 REVALIDACIÓN COMPLETA DEL SISTEMA             ║');
+    logger.info('╚════════════════════════════════════════════════════╝\n');
     
     connection = await pool.getConnection();
     
     // 1️⃣ REVALIDAR CERTIFICACIONES
-    console.log('1️⃣  Revalidando certificaciones...');
+    logger.info('1️⃣  Revalidando certificaciones...');
     const [certificaciones] = await connection.query(
       `SELECT cc.id, cc.monto_certificado, 
               COALESCE(SUM(dcc.monto_utilizado), 0) as total_utilizado
@@ -148,41 +149,41 @@ const revalidarSistema = async (pool) => {
        GROUP BY cc.id`
     );
     
-    console.log(`   Encontradas ${certificaciones.length} certificaciones`);
+    logger.info(`   Encontradas ${certificaciones.length} certificaciones`);
     let certificacionesActualizadas = 0;
     
     for (const cert of certificaciones) {
       const disponible = cert.monto_certificado - cert.total_utilizado;
       const porcentaje = (cert.total_utilizado / cert.monto_certificado * 100).toFixed(2);
       
-      console.log(`   ✓ Cert ${cert.id}: S/. ${cert.monto_certificado} | Utilizado: S/. ${cert.total_utilizado} (${porcentaje}%) | Disponible: S/. ${disponible}`);
+      logger.info(`   ✓ Cert ${cert.id}: S/. ${cert.monto_certificado} | Utilizado: S/. ${cert.total_utilizado} (${porcentaje}%) | Disponible: S/. ${disponible}`);
       certificacionesActualizadas++;
     }
-    console.log(`   ✅ ${certificacionesActualizadas} certificaciones validadas\n`);
+    logger.info(`   ✅ ${certificacionesActualizadas} certificaciones validadas\n`);
     
     // 2️⃣ REVALIDAR FORMATOS EMITIDOS
-    console.log('2️⃣  Revalidando formatos emitidos...');
+    logger.info('2️⃣  Revalidando formatos emitidos...');
     const [formatos] = await connection.query(
-      `SELECT f.id, f.numero_documento, f.certificacion_id, f.estado_uso,
+      `SELECT f.id, f.numero_documento, f.certificacion_id, f.estado_emision,
               COALESCE(SUM(fd.monto), 0) as monto_total
        FROM formato_emisiones f
        LEFT JOIN formato_emisiones_detalles fd ON f.id = fd.formato_emisiones_id
-       WHERE f.estado_uso NOT IN ('BORRADOR', 'ANULADO')
+       WHERE f.estado_emision NOT IN ('BORRADOR', 'ANULADO')
        GROUP BY f.id
        ORDER BY f.id DESC`
     );
     
-    console.log(`   Encontrados ${formatos.length} formatos emitidos`);
+    logger.info(`   Encontrados ${formatos.length} formatos emitidos`);
     let formatosValidados = 0;
     
     for (const fmt of formatos) {
-      console.log(`   ✓ ${fmt.numero_documento} (${fmt.estado_uso}): S/. ${fmt.monto_total} | Certificación: ${fmt.certificacion_id}`);
+      logger.info(`   ✓ ${fmt.numero_documento} (${fmt.estado_emision}): S/. ${fmt.monto_total} | Certificación: ${fmt.certificacion_id}`);
       formatosValidados++;
     }
-    console.log(`   ✅ ${formatosValidados} formatos validados\n`);
+    logger.info(`   ✅ ${formatosValidados} formatos validados\n`);
     
     // 3️⃣ REVALIDAR DETALLES DE CERTIFICACIÓN
-    console.log('3️⃣  Revalidando detalles de certificación...');
+    logger.info('3️⃣  Revalidando detalles de certificación...');
     const [detalles] = await connection.query(
       `SELECT dcc.id, dcc.certificacion_id, dcc.detalle_id, dcc.monto_certificado, dcc.monto_utilizado,
               (dcc.monto_certificado - dcc.monto_utilizado) as monto_disponible
@@ -190,18 +191,18 @@ const revalidarSistema = async (pool) => {
        ORDER BY dcc.certificacion_id, dcc.id`
     );
     
-    console.log(`   Encontrados ${detalles.length} detalles`);
+    logger.info(`   Encontrados ${detalles.length} detalles`);
     let detallesValidados = 0;
     
     for (const det of detalles) {
       const porcentaje = (det.monto_utilizado / det.monto_certificado * 100).toFixed(2);
-      console.log(`   ✓ Det ${det.id}: Cert ${det.certificacion_id} | S/. ${det.monto_certificado} | Utilizado: S/. ${det.monto_utilizado} (${porcentaje}%) | Disponible: S/. ${det.monto_disponible}`);
+      logger.info(`   ✓ Det ${det.id}: Cert ${det.certificacion_id} | S/. ${det.monto_certificado} | Utilizado: S/. ${det.monto_utilizado} (${porcentaje}%) | Disponible: S/. ${det.monto_disponible}`);
       detallesValidados++;
     }
-    console.log(`   ✅ ${detallesValidados} detalles validados\n`);
+    logger.info(`   ✅ ${detallesValidados} detalles validados\n`);
     
     // 4️⃣ REVALIDAR CORRELATIVO
-    console.log('4️⃣  Revalidando correlativo...');
+    logger.info('4️⃣  Revalidando correlativo...');
     const anoActual = new Date().getFullYear();
     const [correlativo] = await connection.query(
       `SELECT cc.id, u.nombre, u.iniciales, cc.numero_proximo, cc.prefijo
@@ -212,19 +213,19 @@ const revalidarSistema = async (pool) => {
       [anoActual]
     );
     
-    console.log(`   Encontrados ${correlativo.length} correlativo para ${anoActual}`);
+    logger.info(`   Encontrados ${correlativo.length} correlativo para ${anoActual}`);
     
     for (const corr of correlativo) {
-      console.log(`   ✓ ${corr.nombre} (${corr.iniciales}): Próximo número: ${corr.numero_proximo}`);
+      logger.info(`   ✓ ${corr.nombre} (${corr.iniciales}): Próximo número: ${corr.numero_proximo}`);
     }
-    console.log(`   ✅ ${correlativo.length} correlativo validados\n`);
+    logger.info(`   ✅ ${correlativo.length} correlativo validados\n`);
     
-    console.log('╔════════════════════════════════════════════════════╗');
-    console.log('║   ✅ REVALIDACIÓN COMPLETADA EXITOSAMENTE         ║');
-    console.log('╚════════════════════════════════════════════════════╝\n');
+    logger.info('╔════════════════════════════════════════════════════╗');
+    logger.info('║   ✅ REVALIDACIÓN COMPLETADA EXITOSAMENTE         ║');
+    logger.info('╚════════════════════════════════════════════════════╝\n');
     
   } catch (error) {
-    console.error('⚠️ Error en revalidación del sistema:', error.message);
+    logger.error('⚠️ Error en revalidación del sistema:', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -233,7 +234,7 @@ const revalidarSistema = async (pool) => {
 const generarCorrelativosInicial = async (pool) => {
   let connection;
   try {
-    console.log('🚀 Verificando inicialización de correlativo...');
+    logger.info('🚀 Verificando inicialización de correlativo...');
     connection = await pool.getConnection();
     
     const anoActual = new Date().getFullYear();
@@ -245,7 +246,7 @@ const generarCorrelativosInicial = async (pool) => {
     );
     
     if (existentes[0].count > 0) {
-      console.log(`  ✅ Correlativo ya generados para año ${anoActual}`);
+      logger.info(`  ✅ Correlativo ya generados para año ${anoActual}`);
       return;
     }
     
@@ -255,11 +256,11 @@ const generarCorrelativosInicial = async (pool) => {
     );
     
     if (usuarios.length === 0) {
-      console.log('  ⚠️ No hay usuarios activos con iniciales para generar correlativo');
+      logger.info('  ⚠️ No hay usuarios activos con iniciales para generar correlativo');
       return;
     }
     
-    console.log(`  Generando correlativo para ${usuarios.length} usuario(s)...`);
+    logger.info(`  Generando correlativo para ${usuarios.length} usuario(s)...`);
     let generados = 0;
     
     for (const usuario of usuarios) {
@@ -274,17 +275,17 @@ const generarCorrelativosInicial = async (pool) => {
         );
         
         generados++;
-        console.log(`    ✓ ${usuario.nombre} (${prefijo})`);
+        logger.info(`    ✓ ${usuario.nombre} (${prefijo})`);
       } catch (error) {
         if (!error.message.includes('Duplicate entry')) {
-          console.error(`    ❌ Error con ${usuario.nombre}: ${error.message}`);
+          logger.error(`    ❌ Error con ${usuario.nombre}: ${error.message}`);
         }
       }
     }
     
-    console.log(`  ✅ ${generados} correlativo generados para año ${anoActual}`);
+    logger.info(`  ✅ ${generados} correlativo generados para año ${anoActual}`);
   } catch (error) {
-    console.error('⚠️ Error generando correlativo iniciales:', error.message);
+    logger.error('⚠️ Error generando correlativo iniciales:', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -293,22 +294,22 @@ const generarCorrelativosInicial = async (pool) => {
 const ejecutarMigracionesSql = async (pool) => {
   let connection;
   try {
-    console.log('Verificando migraciones SQL...');
+    logger.info('Verificando migraciones SQL...');
     connection = await pool.getConnection();
     
     const migrationsDir = path.join(__dirname, '../migrations');
     if (!fs.existsSync(migrationsDir)) {
-      console.log('Carpeta de migraciones no encontrada');
+      logger.info('Carpeta de migraciones no encontrada');
       return;
     }
     
     const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
     if (files.length === 0) {
-      console.log('No hay migraciones SQL');
+      logger.info('No hay migraciones SQL');
       return;
     }
     
-    console.log(`Encontradas ${files.length} migracion(es) SQL`);
+    logger.info(`Encontradas ${files.length} migracion(es) SQL`);
     
     for (const file of files) {
       const filePath = path.join(migrationsDir, file);
@@ -317,7 +318,7 @@ const ejecutarMigracionesSql = async (pool) => {
         const sqlScript = fs.readFileSync(filePath, 'utf8');
         
         if (sqlScript.includes('DELIMITER')) {
-          console.log(`  SALTADO: ${file} (DELIMITER)`);
+          logger.info(`  SALTADO: ${file} (DELIMITER)`);
           continue;
         }
         
@@ -326,7 +327,7 @@ const ejecutarMigracionesSql = async (pool) => {
           .map(stmt => stmt.trim())
           .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
         
-        console.log(`  Procesando ${file} (${statements.length} statements)`);
+        logger.info(`  Procesando ${file} (${statements.length} statements)`);
         
         for (let i = 0; i < statements.length; i++) {
           const statement = statements[i];
@@ -338,23 +339,23 @@ const ejecutarMigracionesSql = async (pool) => {
               const isIgnorable = ignorable.some(code => (err.code || err.message || '').includes(code));
               
               if (!isIgnorable) {
-                console.error(`    ERROR en statement ${i+1}:`);
-                console.error(`    Codigo: ${err.code}`);
-                console.error(`    Mensaje: ${err.message.substring(0, 150)}`);
+                logger.error(`    ERROR en statement ${i+1}:`);
+                logger.error(`    Codigo: ${err.code}`);
+                logger.error(`    Mensaje: ${err.message.substring(0, 150)}`);
               }
             }
           }
         }
         
-        console.log(`  OK: ${file}`);
+        logger.info(`  OK: ${file}`);
       } catch (err) {
-        console.error(`  ERROR leyendo ${file}: ${err.message}`);
+        logger.error(`  ERROR leyendo ${file}: ${err.message}`);
       }
     }
     
-    console.log('Migraciones SQL completadas');
+    logger.info('Migraciones SQL completadas');
   } catch (error) {
-    console.error('Error:', error.message);
+    logger.error('Error:', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -363,7 +364,7 @@ const ejecutarMigracionesSql = async (pool) => {
 const actualizarInicialesUsuarios = async (pool) => {
   let connection;
   try {
-    console.log('🔄 Verificando iniciales en usuarios...');
+    logger.info('🔄 Verificando iniciales en usuarios...');
     connection = await pool.getConnection();
     
     // Verificar si la columna iniciales existe
@@ -373,11 +374,11 @@ const actualizarInicialesUsuarios = async (pool) => {
     );
     
     if (columns.length === 0) {
-      console.log('  Agregando columna iniciales...');
+      logger.info('  Agregando columna iniciales...');
       try {
         await connection.query(`ALTER TABLE users ADD COLUMN iniciales VARCHAR(10)`);
         await connection.query(`CREATE INDEX idx_iniciales ON users(iniciales)`);
-        console.log('  ✅ Columna iniciales creada');
+        logger.info('  ✅ Columna iniciales creada');
       } catch (err) {
         if (!err.message.includes('Duplicate column')) {
           throw err;
@@ -386,7 +387,7 @@ const actualizarInicialesUsuarios = async (pool) => {
     }
     
     // Recalcular iniciales para TODOS los usuarios
-    console.log(`  Recargando iniciales para TODOS los usuarios...`);
+    logger.info(`  Recargando iniciales para TODOS los usuarios...`);
     
     // Obtener todos los usuarios
     const [usuarios] = await connection.query(
@@ -403,15 +404,15 @@ const actualizarInicialesUsuarios = async (pool) => {
           `UPDATE users SET iniciales = ? WHERE id = ?`,
           [iniciales, usuario.id]
         );
-        console.log(`    ${usuario.nombre} → ${iniciales}`);
+        logger.info(`    ${usuario.nombre} → ${iniciales}`);
       }
       
-      console.log(`  ✅ Iniciales recargadas en ${usuarios.length} usuario(s)`);
+      logger.info(`  ✅ Iniciales recargadas en ${usuarios.length} usuario(s)`);
     } else {
-      console.log('  ⚠️ No hay usuarios en la base de datos');
+      logger.info('  ⚠️ No hay usuarios en la base de datos');
     }
   } catch (error) {
-    console.error('❌ Error actualizando iniciales:', error.message);
+    logger.error('❌ Error actualizando iniciales:', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -425,7 +426,7 @@ const crearTablasComprobantes = async (pool) => {
   try {
     connection = await pool.getConnection();
 
-    console.log('\n🔄 Creando tablas de Comprobantes y Rendición...\n');
+    logger.info('\n🔄 Creando tablas de Comprobantes y Rendición...\n');
 
     // 📌 Tabla MAESTRA: comprobantes
     const sqlComprobantes = `
@@ -450,7 +451,7 @@ const crearTablasComprobantes = async (pool) => {
     `;
 
     await connection.query(sqlComprobantes);
-    console.log('✅ Tabla comprobantes creada/verificada');
+    logger.info('✅ Tabla comprobantes creada/verificada');
 
     // 📌 Tabla DETALLE: comprobante_detalles
     const sqlDetalles = `
@@ -468,20 +469,20 @@ const crearTablasComprobantes = async (pool) => {
     `;
 
     await connection.query(sqlDetalles);
-    console.log('✅ Tabla comprobante_detalles creada/verificada');
+    logger.info('✅ Tabla comprobante_detalles creada/verificada');
 
-    console.log('\n═══════════════════════════════════════════════════════');
-    console.log('✅ SISTEMA DE COMPROBANTES LISTO');
-    console.log('   └─ comprobantes (Tabla Maestra)');
-    console.log('   └─ comprobante_detalles (Tabla Detalle)\n');
+    logger.info('\n═══════════════════════════════════════════════════════');
+    logger.info('✅ SISTEMA DE COMPROBANTES LISTO');
+    logger.info('   └─ comprobantes (Tabla Maestra)');
+    logger.info('   └─ comprobante_detalles (Tabla Detalle)\n');
 
     return true;
   } catch (error) {
     if (error.message.includes('already exists')) {
-      console.log('⚠️  Tablas de comprobantes ya existen (omitido)');
+      logger.info('⚠️  Tablas de comprobantes ya existen (omitido)');
       return true;
     }
-    console.error('❌ Error al crear tablas de comprobantes:', error.message);
+    logger.error('❌ Error al crear tablas de comprobantes:', error.message);
     throw error;
   } finally {
     if (connection) connection.release();

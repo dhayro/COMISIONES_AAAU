@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { respuestaError500 } = require('../shared/errores');
 
 /**
  * @class FuenteFinanciamientoController
@@ -18,7 +19,7 @@ const obtenerFuentes = async (req, res) => {
       connection.release();
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -42,7 +43,7 @@ const obtenerFuentePorId = async (req, res) => {
       connection.release();
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -94,7 +95,7 @@ const crearFuente = async (req, res) => {
         error: `Ya existe una fuente con estos datos. El nombre y la abreviatura deben ser únicos.`,
       });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -157,7 +158,7 @@ const actualizarFuente = async (req, res) => {
         error: `Ya existe una fuente con estos datos. El nombre y la abreviatura deben ser únicos.`,
       });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -190,7 +191,7 @@ const eliminarFuente = async (req, res) => {
         error: 'No se puede eliminar la fuente porque está siendo utilizada en otras tablas',
       });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 

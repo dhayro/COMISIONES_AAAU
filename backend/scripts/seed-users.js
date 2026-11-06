@@ -67,7 +67,7 @@ async function seedUsers() {
 
       let inserted = 0;
       USUARIOS.forEach((usuario, idx) => {
-        const sql = 'INSERT INTO users (username, email, password, nombre, rol, activo, creado_en) VALUES (?, ?, ?, ?, ?, ?, NOW())';
+        const sql = 'INSERT INTO users (username, email, password, nombre, rol, activo, creado_en, debe_cambiar_password) VALUES (?, ?, ?, ?, ?, ?, NOW(), 1)';
         connection.query(sql, usuario, (err) => {
           inserted++;
           if (err) {

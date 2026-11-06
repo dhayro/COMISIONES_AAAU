@@ -1,17 +1,17 @@
+const logger = require('./shared/logger');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const swaggerUi = require('swagger-ui-express');
-const { spawn } = require('child_process');
 require('dotenv').config();
-const { pool, initDatabase } = require('./config/database');
+if (!process.env.JWT_SECRET || !process.env.JWT_EXPIRE) {
+  logger.error('❌ Faltan JWT_SECRET o JWT_EXPIRE en .env. El servidor no puede iniciar.');
+  process.exit(1);
+}
+const authMiddleware = require('./middleware/auth');
+const helmet = require('helmet');
+const { respuestaError500 } = require('./shared/errores');
 const swaggerSpec = require('./config/swagger');
-const { ejecutarMigraciones, ejecutarMigracionesFormatoEmisiones, ejecutarMigracionesEstadoCertificado, corregirEstadoUsoEnum, agregarCertificacionId, agregarMontoUtilizado, sincronizarMontoUtilizado, ejecutarMigracionesSql, actualizarInicialesUsuarios, generarCorrelativosInicial } = require('./config/migraciones');
-const { crearTablasRendicionesMaestras } = require('./migrations/004_crear_rendiciones_maestras');
-const { crearTablaRendicionComprobantes } = require('./migrations/007_crear_rendicion_comprobantes');
-const { agregarRendidoEnum } = require('./migrations/008_agregar_rendido_enum_estado_emision');
-const { agregarOrdenRendiciones } = require('./migrations/009_agregar_orden_rendiciones');
-const { crearTablaRutas } = require('./migrations/010_crear_tabla_rutas');
 const authRoutes = require('./routes/auth');
 const comisionesRoutes = require('./routes/comisiones');
 const aprobacionesRoutes = require('./routes/aprobaciones');
@@ -25,163 +25,58 @@ const tipoComprobanteRoutes = require('./routes/tipoComprobante');
 const proveedorRoutes = require('./routes/proveedor');
 const decolectaRoutes = require('./routes/decolecta');
 const rutasRoutes = require('./routes/rutas');
+const sunatRoutes = require('./routes/sunat');
 
 const app = express();
+app.set('trust proxy', 1);
+app.use(helmet({ contentSecurityPolicy: false }));
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// 🆕 Servir archivos estáticos desde la carpeta uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Documentación Swagger
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Rutas
 app.use('/api/auth', authRoutes);
-app.use('/api/decolecta', decolectaRoutes);  // 🔥 Sin auth (terceros)
-app.use('/api/proveedores', proveedorRoutes);  // 🔥 Sin auth (maestro)
-app.use('/api/tipo-comprobante', tipoComprobanteRoutes);  // 🔥 Sin auth (maestro)
+app.use('/api/decolecta', authMiddleware, decolectaRoutes);
+app.use('/api/proveedores', authMiddleware, proveedorRoutes);
+app.use('/api/tipo-comprobante', authMiddleware, tipoComprobanteRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/pdf', pdfEnrichmentRoutes);
-app.use('/api', comisionesRoutes);  // ← Con auth (todo lo demás)
-app.use('/api/aprobaciones', aprobacionesRoutes);
-app.use('/api/certificaciones-credito', certificacionesRoutes);
-app.use('/api/formato-emisiones/correlativo-control', correlativoControlRoutes);
-app.use('/api/comprobantes', comprobantesRoutes);
-app.use('/api/rendiciones', rendicionesRoutes);
-app.use('/api/rutas', rutasRoutes);
-
-// Ruta de prueba
 app.get('/api/health', (req, res) => {
   res.json({ status: 'API funcionando correctamente' });
 });
+app.use('/api', comisionesRoutes);  // ← Con auth (todo lo demás)
+app.use('/api/aprobaciones', authMiddleware, aprobacionesRoutes);
+app.use('/api/certificaciones-credito', certificacionesRoutes);
+app.use('/api/formato-emisiones/correlativo-control', correlativoControlRoutes);
+app.use('/api/comprobantes', authMiddleware, comprobantesRoutes);
+app.use('/api/rendiciones', authMiddleware, rendicionesRoutes);
+app.use('/api/rutas', rutasRoutes);
+app.use('/api/sunat', authMiddleware, sunatRoutes);
 
-// Función para ejecutar seed de usuarios
-const seedUsersIfNeeded = () => {
-  return new Promise((resolve) => {
-    console.log('🔄 Verificando si es necesario cargar usuarios...');
-    const seedProcess = spawn('node', ['scripts/seed-users.js'], {
-      stdio: 'inherit',
-      cwd: __dirname
-    });
+app.use((req, res) => {
+  res.status(404).json({ error: 'Ruta no encontrada' });
+});
 
-    seedProcess.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        console.warn('⚠️  Advertencia al ejecutar seed de usuarios');
-        resolve();
-      }
-    });
-
-    seedProcess.on('error', (err) => {
-      console.warn('⚠️  Error ejecutando seed:', err.message);
-      resolve();
-    });
-  });
-};
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err.status || err.statusCode || 500;
+  if (status >= 500) {
+    return res.status(500).json(respuestaError500(err));
+  }
+  return res.status(status).json({ error: 'Solicitud no válida' });
+});
 
 // Iniciar servidor
 const PORT = process.env.PORT || 5000;
 
-const crearTablaCorrelativos = async (pool) => {
-  let connection;
-  try {
-    connection = await pool.getConnection();
-    
-    // Crear tabla correlativo_control
-    const sql = `CREATE TABLE IF NOT EXISTS correlativo_control (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      usuario_id INT NOT NULL,
-      ano INT NOT NULL,
-      numero_inicial INT NOT NULL DEFAULT 1,
-      numero_proximo INT NOT NULL DEFAULT 1,
-      prefijo VARCHAR(50),
-      descripcion VARCHAR(255),
-      activo BOOLEAN DEFAULT 1,
-      creado_por INT,
-      creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (usuario_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (creado_por) REFERENCES users(id) ON DELETE SET NULL,
-      UNIQUE KEY unique_usuario_ano (usuario_id, ano),
-      INDEX idx_usuario (usuario_id),
-      INDEX idx_ano (ano),
-      INDEX idx_activo (activo)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
-    
-    await connection.query(sql);
-    console.log('✅ Tabla correlativo_control verificada/creada');
-  } catch (error) {
-    console.error('❌ Error creando tabla correlativo_control:', error.message);
-  } finally {
-    if (connection) connection.release();
-  }
-};
-
 const startServer = async () => {
   try {
-    // Inicializar base de datos
-    await initDatabase();
-    
-    // Crear tabla de correlativo_control
-    await crearTablaCorrelativos(pool);
-    
-    // Ejecutar migraciones automáticas
-    await ejecutarMigraciones(pool);
-    
-    // Ejecutar migraciones de formato_emisiones
-    await ejecutarMigracionesFormatoEmisiones(pool);
-    
-    // Ejecutar migraciones de estado_uso en certificaciones
-    await ejecutarMigracionesEstadoCertificado(pool);
-    
-    // Corregir estado_uso a ENUM si fue creado como VARCHAR
-    await corregirEstadoUsoEnum(pool);
-    
-    // Agregar certificacion_id a formato_emisiones
-    await agregarCertificacionId(pool);
-    
-    // Agregar columna monto_utilizado a detalles_certificacion_credito
-    await agregarMontoUtilizado(pool);
-    
-    // Sincronizar monto_utilizado basándose en formatos existentes
-    await sincronizarMontoUtilizado(pool);
-    
-    // 🆕 Ejecutar migraciones SQL de la carpeta migrations/
-    await ejecutarMigracionesSql(pool);
-    
-    // 🆕 Crear tablas maestras para rendiciones (tipo_comprobante, proveedores y rendiciones)
-    await crearTablasRendicionesMaestras(pool);
-    
-    // 🆕 Crear tablas para rendición con múltiples comprobantes
-    await crearTablaRendicionComprobantes(pool);
-    
-    // 🆕 Agregar RENDIDO al ENUM estado_emision
-    await agregarRendidoEnum(pool);
-    
-    // 🆕 Agregar columna orden para mantener orden de comprobantes
-    await agregarOrdenRendiciones(pool);
-    
-    // 🆕 Crear tabla rutas para registrar viajes
-    await crearTablaRutas(pool);
-    
-    // 🆕 Actualizar iniciales de usuarios
-    await actualizarInicialesUsuarios(pool);
-    
-    // 🆕 Generar correlativo automáticos para los usuarios
-    await generarCorrelativosInicial(pool);
-    
-    // 🆕 Revalidar el sistema completo
-    const { revalidarSistema } = require('./config/migraciones');
-    await revalidarSistema(pool);
-    
-    // Ejecutar seed de usuarios
-    await seedUsersIfNeeded();
-    
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`
+      logger.info(`
 ╔════════════════════════════════════════════════════╗
 ║   🚀 SERVIDOR INICIADO EXITOSAMENTE               ║
 ║   Accesible en: http://0.0.0.0:${PORT}             ║
@@ -191,7 +86,7 @@ const startServer = async () => {
       `);
     });
   } catch (error) {
-    console.error('❌ Error al iniciar servidor:', error);
+    logger.error('❌ Error al iniciar servidor:', error);
     process.exit(1);
   }
 };

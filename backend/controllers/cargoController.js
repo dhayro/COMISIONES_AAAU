@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { respuestaError500 } = require('../shared/errores');
 
 /**
  * @class CargoController
@@ -18,7 +19,7 @@ const obtenerCargos = async (req, res) => {
       connection.release();
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -42,7 +43,7 @@ const obtenerCargoPorId = async (req, res) => {
       connection.release();
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -88,7 +89,7 @@ const crearCargo = async (req, res) => {
         error: `Ya existe un cargo con este nombre. El nombre debe ser único.`,
       });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -145,7 +146,7 @@ const actualizarCargo = async (req, res) => {
         error: `Ya existe un cargo con este nombre. El nombre debe ser único.`,
       });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -178,7 +179,7 @@ const eliminarCargo = async (req, res) => {
         error: 'No se puede eliminar el cargo porque está siendo utilizado en otras tablas',
       });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 

@@ -1,4 +1,6 @@
+const logger = require('../shared/logger');
 const { pool } = require('../config/database');
+const { recalcularDetalles } = require('../shared/presupuesto');
 
 // 🆕 Función auxiliar para convertir fechas a hora de Lima (UTC-5)
 const convertirAHoraLima = (fecha) => {
@@ -27,7 +29,7 @@ const convertirAHoraLima = (fecha) => {
     }
     return fecha;
   } catch (error) {
-    console.warn('⚠️ Error al convertir fecha a Lima:', error);
+    logger.warn('⚠️ Error al convertir fecha a Lima:', error);
     return fecha;
   }
 };
@@ -85,6 +87,10 @@ class FormatoEmision {
   }
 
   // Obtener formato por ID
+  static async marcarRindiendo(id, conn) {
+    return this.actualizar(id, { estado_emision: 'RINDIENDO', fecha_rendicion: null }, conn);
+  }
+
   static async obtenerPorId(id) {
     try {
       const [formatos] = await pool.query(
@@ -145,6 +151,9 @@ class FormatoEmision {
                a.nombre_corto as ambito_nombre,
                c.lugar as comision_lugar,
                cc.nota as certificacion_nota,
+               (SELECT COUNT(*) FROM rendiciones r WHERE r.formato_emision_id = fe.id) as comprobantes_count,
+               (SELECT COUNT(*) FROM rendiciones r LEFT JOIN tipo_comprobante tcv ON tcv.id = r.tipo_comprobante_id WHERE r.formato_emision_id = fe.id AND COALESCE(tcv.nombre, '') NOT IN ('DECLARACION JURADA', 'OTROS DOCUMENTOS')) as comprobantes_validables,
+               (SELECT COUNT(*) FROM rendiciones r LEFT JOIN tipo_comprobante tcp ON tcp.id = r.tipo_comprobante_id WHERE r.formato_emision_id = fe.id AND COALESCE(tcp.nombre, '') NOT IN ('DECLARACION JURADA', 'OTROS DOCUMENTOS') AND r.estado_rendicion NOT IN ('VALIDADO', 'MANUAL')) as comprobantes_validables_pendientes,
                COUNT(fed.id) as total_detalles
         FROM formato_emisiones fe
         LEFT JOIN users u ON fe.usuario_id = u.id
@@ -166,12 +175,12 @@ class FormatoEmision {
         // USUARIO: Ver solo sus propios formatos
         query += ` AND fe.usuario_id = ?`;
         params.push(usuarioId);
-        console.log(`🔐 FILTRO: USUARIO (id=${usuarioId})`);
+        logger.info(`🔐 FILTRO: USUARIO (id=${usuarioId})`);
       } else if (rol === 'administrativo' && userAmbitoId) {
         // 🆕 ADMINISTRATIVO: Ver solo formatos de usuarios del mismo ámbito
         query += ` AND u.ambito_id = ?`;
         params.push(userAmbitoId);
-        console.log(`🔐 FILTRO: ADMINISTRATIVO (ambito_id=${userAmbitoId})`);
+        logger.info(`🔐 FILTRO: ADMINISTRATIVO (ambito_id=${userAmbitoId})`);
       }
       // JEFE y ADMIN: ven todos (sin filtro adicional)
 
@@ -211,7 +220,7 @@ class FormatoEmision {
   }
 
   // Actualizar formato
-  static async actualizar(id, data) {
+  static async actualizar(id, data, conn) {
     const {
       comision_id,
       usuario_id,
@@ -277,16 +286,16 @@ class FormatoEmision {
       // 🆕 Si no hay campos a actualizar, solo actualizar el timestamp
       if (campos.length === 1) {
         // Solo timestamp
-        console.log('⚠️ Sin campos a actualizar, solo actualizando timestamp');
+        logger.info('⚠️ Sin campos a actualizar, solo actualizando timestamp');
       }
       
       const query = `UPDATE formato_emisiones SET ${campos.join(', ')} WHERE id = ?`;
-      console.log('🔧 Query de actualización:', query);
-      console.log('📊 Valores:', valores);
-      console.log('📊 Campos:', campos);
+      logger.info('🔧 Query de actualización:', query);
+      logger.info('📊 Valores:', valores);
+      logger.info('📊 Campos:', campos);
       
-      const [result] = await pool.query(query, valores);
-      console.log(`✅ Filas afectadas: ${result.affectedRows}`);
+      const [result] = await (conn || pool).query(query, valores);
+      logger.info(`✅ Filas afectadas: ${result.affectedRows}`);
       return result.affectedRows > 0;
     } catch (error) {
       throw new Error(`Error al actualizar formato: ${error.message}`);
@@ -295,6 +304,7 @@ class FormatoEmision {
 
   // Eliminar formato
   static async eliminar(id) {
+    const idsAfectados = [];
     try {
       // 1️⃣ Obtener detalles del formato para restar sus montos
       const [detalles] = await pool.query(
@@ -304,18 +314,13 @@ class FormatoEmision {
         [id]
       );
       
-      console.log(`📋 Detalles del formato ${id} a eliminar: ${detalles.length}`);
+      logger.info(`📋 Detalles del formato ${id} a eliminar: ${detalles.length}`);
       
       // 2️⃣ Restar los montos utilizados de cada detalle
       for (const detalle of detalles) {
         if (detalle.detalles_certificacion_credito_id) {
-          await pool.query(
-            `UPDATE detalles_certificacion_credito 
-             SET monto_utilizado = monto_utilizado - ?
-             WHERE id = ?`,
-            [detalle.monto || 0, detalle.detalles_certificacion_credito_id]
-          );
-          console.log(`✅ Monto utilizado actualizado (restado) para detalle ${detalle.detalles_certificacion_credito_id}: -S/. ${detalle.monto}`);
+          idsAfectados.push(detalle.detalles_certificacion_credito_id);
+          logger.info(`✅ Monto utilizado actualizado (restado) para detalle ${detalle.detalles_certificacion_credito_id}: -S/. ${detalle.monto}`);
         }
       }
       
@@ -324,6 +329,7 @@ class FormatoEmision {
         'DELETE FROM formato_emisiones_detalles WHERE formato_emision_id = ?',
         [id]
       );
+      await recalcularDetalles(idsAfectados);
 
       // 4️⃣ Eliminar formato
       const [result] = await pool.query(

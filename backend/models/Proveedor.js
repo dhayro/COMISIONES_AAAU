@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const { pool } = require('../config/database');
 
 class Proveedor {
@@ -25,10 +26,10 @@ class Proveedor {
         [razon_social, ruc_dni, tipo_documento, direccion || null, telefono || null, email || null, contacto_nombre || null]
       );
 
-      console.log(`✅ Proveedor creado: ${razon_social} (${ruc_dni})`);
+      logger.info(`✅ Proveedor creado: ${razon_social} (${ruc_dni})`);
       return { id: result.insertId, ...datos, activo: 1 };
     } catch (error) {
-      console.error('❌ Error en Proveedor.crear:', error);
+      logger.error('❌ Error en Proveedor.crear:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -48,7 +49,7 @@ class Proveedor {
       );
       return rows[0] || null;
     } catch (error) {
-      console.error('❌ Error en Proveedor.obtenerPorId:', error);
+      logger.error('❌ Error en Proveedor.obtenerPorId:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -68,7 +69,7 @@ class Proveedor {
       );
       return rows[0] || null;
     } catch (error) {
-      console.error('❌ Error en Proveedor.obtenerPorRucDni:', error);
+      logger.error('❌ Error en Proveedor.obtenerPorRucDni:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -105,7 +106,7 @@ class Proveedor {
       const [rows] = await connection.query(query, params);
       return rows;
     } catch (error) {
-      console.error('❌ Error en Proveedor.listar:', error);
+      logger.error('❌ Error en Proveedor.listar:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -145,10 +146,10 @@ class Proveedor {
       values.push(id);
 
       await connection.query(query, values);
-      console.log(`✅ Proveedor ${id} actualizado`);
+      logger.info(`✅ Proveedor ${id} actualizado`);
       return true;
     } catch (error) {
-      console.error('❌ Error en Proveedor.actualizar:', error);
+      logger.error('❌ Error en Proveedor.actualizar:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -163,10 +164,10 @@ class Proveedor {
     try {
       connection = await pool.getConnection();
       await connection.query('UPDATE proveedores SET activo = 0 WHERE id = ?', [id]);
-      console.log(`✅ Proveedor ${id} desactivado`);
+      logger.info(`✅ Proveedor ${id} desactivado`);
       return true;
     } catch (error) {
-      console.error('❌ Error en Proveedor.eliminar:', error);
+      logger.error('❌ Error en Proveedor.eliminar:', error);
       throw error;
     } finally {
       if (connection) connection.release();

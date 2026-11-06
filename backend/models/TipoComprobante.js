@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const { pool } = require('../config/database');
 
 class TipoComprobante {
@@ -16,10 +17,10 @@ class TipoComprobante {
         [nombre, descripcion || null]
       );
 
-      console.log(`✅ Tipo Comprobante creado: ${nombre}`);
+      logger.info(`✅ Tipo Comprobante creado: ${nombre}`);
       return { id: result.insertId, nombre, descripcion, activo: 1 };
     } catch (error) {
-      console.error('❌ Error en TipoComprobante.crear:', error);
+      logger.error('❌ Error en TipoComprobante.crear:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -39,7 +40,7 @@ class TipoComprobante {
       );
       return rows[0] || null;
     } catch (error) {
-      console.error('❌ Error en TipoComprobante.obtenerPorId:', error);
+      logger.error('❌ Error en TipoComprobante.obtenerPorId:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -63,7 +64,7 @@ class TipoComprobante {
       const [rows] = await connection.query(query);
       return rows;
     } catch (error) {
-      console.error('❌ Error en TipoComprobante.listar:', error);
+      logger.error('❌ Error en TipoComprobante.listar:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -99,10 +100,10 @@ class TipoComprobante {
       values.push(id);
 
       await connection.query(query, values);
-      console.log(`✅ Tipo Comprobante ${id} actualizado`);
+      logger.info(`✅ Tipo Comprobante ${id} actualizado`);
       return true;
     } catch (error) {
-      console.error('❌ Error en TipoComprobante.actualizar:', error);
+      logger.error('❌ Error en TipoComprobante.actualizar:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -117,10 +118,10 @@ class TipoComprobante {
     try {
       connection = await pool.getConnection();
       await connection.query('DELETE FROM tipo_comprobante WHERE id = ?', [id]);
-      console.log(`✅ Tipo Comprobante ${id} eliminado`);
+      logger.info(`✅ Tipo Comprobante ${id} eliminado`);
       return true;
     } catch (error) {
-      console.error('❌ Error en TipoComprobante.eliminar:', error);
+      logger.error('❌ Error en TipoComprobante.eliminar:', error);
       throw error;
     } finally {
       if (connection) connection.release();

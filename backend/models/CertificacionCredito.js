@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { ESTADOS_QUE_AFECTAN } = require('../shared/presupuesto');
 
 class CertificacionCredito {
   // ========== CERTIFICACIÓN PRINCIPAL ==========
@@ -313,6 +314,44 @@ class CertificacionCredito {
       return result[0].total || 0;
     } catch (error) {
       throw new Error(`Error al obtener total: ${error.message}`);
+    }
+  }
+
+  // Formatos asignados a la certificación, con su detalle por partida
+  static async listarFormatos(certificacion_credito_id) {
+    try {
+      const [formatos] = await pool.query(
+        `SELECT fe.id, fe.numero_documento, fe.estado_emision, fe.fecha_emision, fe.tipo_emision,
+                u.nombre AS usuario_nombre
+         FROM formato_emisiones fe
+         LEFT JOIN users u ON fe.usuario_id = u.id
+         WHERE fe.certificacion_id = ?
+         ORDER BY fe.fecha_emision DESC, fe.id DESC`,
+        [certificacion_credito_id]
+      );
+      if (formatos.length === 0) return [];
+
+      const [detalles] = await pool.query(
+        `SELECT fed.id, fed.formato_emision_id, fed.monto, fed.detalles_certificacion_credito_id,
+                cl.nombre AS clasificador_nombre, cl.partida
+         FROM formato_emisiones_detalles fed
+         JOIN clasificadores cl ON fed.clasificador_id = cl.id
+         WHERE fed.formato_emision_id IN (?)
+         ORDER BY fed.id`,
+        [formatos.map((f) => f.id)]
+      );
+
+      return formatos.map((formato) => {
+        const detallesFormato = detalles.filter((d) => d.formato_emision_id === formato.id);
+        return {
+          ...formato,
+          afecta_presupuesto: ESTADOS_QUE_AFECTAN.includes(formato.estado_emision),
+          total: detallesFormato.reduce((suma, d) => suma + Number(d.monto || 0), 0),
+          detalles: detallesFormato,
+        };
+      });
+    } catch (error) {
+      throw new Error(`Error al listar formatos: ${error.message}`);
     }
   }
 }

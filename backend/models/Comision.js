@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const { pool } = require('../config/database');
 
 class Comision {
@@ -287,14 +288,14 @@ class Comision {
       observacion
     } = data;
 
-    console.log('📝 MODELO - ACTUALIZAR COMISIONADO:');
-    console.log('ID del comisionado:', id);
-    console.log('Valores a actualizar:');
-    console.log('  - días:', dias);
-    console.log('  - costo_xdia:', costo_xdia);
-    console.log('  - monto:', monto);
-    console.log('  - descripcion:', descripcion);
-    console.log('  - observacion:', observacion);
+    logger.info('📝 MODELO - ACTUALIZAR COMISIONADO:');
+    logger.info('ID del comisionado:', id);
+    logger.info('Valores a actualizar:');
+    logger.info('  - días:', dias);
+    logger.info('  - costo_xdia:', costo_xdia);
+    logger.info('  - monto:', monto);
+    logger.info('  - descripcion:', descripcion);
+    logger.info('  - observacion:', observacion);
 
     try {
       await pool.query(
@@ -304,7 +305,7 @@ class Comision {
          WHERE id = ?`,
         [dias, costo_xdia, monto, descripcion, observacion, id]
       );
-      console.log('✔️ UPDATE SQL EJECUTADO EXITOSAMENTE');
+      logger.info('✔️ UPDATE SQL EJECUTADO EXITOSAMENTE');
       return true;
     } catch (error) {
       throw new Error(`Error al actualizar comisionado: ${error.message}`);
@@ -341,9 +342,9 @@ class Comision {
         return sum + (parseFloat(com.monto) || 0);
       }, 0);
 
-      console.log(`📊 RECALCULANDO TOTAL - Comisión ${comisionId}:`);
-      console.log(`   Comisionados encontrados: ${comisionados.length}`);
-      console.log(`   Suma de montos: ${total.toFixed(2)}`);
+      logger.info(`📊 RECALCULANDO TOTAL - Comisión ${comisionId}:`);
+      logger.info(`   Comisionados encontrados: ${comisionados.length}`);
+      logger.info(`   Suma de montos: ${total.toFixed(2)}`);
 
       // Actualizar la tabla
       const [result] = await pool.query(
@@ -351,7 +352,7 @@ class Comision {
         [total, comisionId]
       );
 
-      console.log(`   ✅ costo_total_comision actualizado a: ${total.toFixed(2)}`);
+      logger.info(`   ✅ costo_total_comision actualizado a: ${total.toFixed(2)}`);
       return true;
     } catch (error) {
       throw new Error(`Error al recalcular total: ${error.message}`);

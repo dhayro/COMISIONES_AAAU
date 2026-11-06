@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const { pool } = require('../config/database');
 
 class Comprobante {
@@ -35,10 +36,10 @@ class Comprobante {
         ]
       );
 
-      console.log(`✅ Comprobante creado: ID ${result.insertId}`);
+      logger.info(`✅ Comprobante creado: ID ${result.insertId}`);
       return { id: result.insertId, ...datos, estado_rendicion: 'PENDIENTE' };
     } catch (error) {
-      console.error('❌ Error en Comprobante.crear:', error);
+      logger.error('❌ Error en Comprobante.crear:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -60,7 +61,7 @@ class Comprobante {
 
       return rows[0] || null;
     } catch (error) {
-      console.error('❌ Error en Comprobante.obtenerPorId:', error);
+      logger.error('❌ Error en Comprobante.obtenerPorId:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -98,7 +99,7 @@ class Comprobante {
       const [rows] = await connection.query(query, params);
       return rows;
     } catch (error) {
-      console.error('❌ Error en Comprobante.listar:', error);
+      logger.error('❌ Error en Comprobante.listar:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -139,10 +140,10 @@ class Comprobante {
 
       const [result] = await connection.query(query, values);
 
-      console.log(`✅ Comprobante ${id} actualizado`);
+      logger.info(`✅ Comprobante ${id} actualizado`);
       return result;
     } catch (error) {
-      console.error('❌ Error en Comprobante.actualizar:', error);
+      logger.error('❌ Error en Comprobante.actualizar:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -166,10 +167,10 @@ class Comprobante {
         [id]
       );
 
-      console.log(`✅ Comprobante ${id} eliminado`);
+      logger.info(`✅ Comprobante ${id} eliminado`);
       return result;
     } catch (error) {
-      console.error('❌ Error en Comprobante.eliminar:', error);
+      logger.error('❌ Error en Comprobante.eliminar:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -197,7 +198,7 @@ class Comprobante {
         detalles,
       };
     } catch (error) {
-      console.error('❌ Error en Comprobante.obtenerConDetalles:', error);
+      logger.error('❌ Error en Comprobante.obtenerConDetalles:', error);
       throw error;
     } finally {
       if (connection) connection.release();

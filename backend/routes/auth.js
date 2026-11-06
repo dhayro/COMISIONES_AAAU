@@ -2,6 +2,15 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth');
+const rateLimit = require('express-rate-limit');
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de inicio de sesión. Intenta de nuevo en 15 minutos.' },
+});
 
 /**
  * @swagger
@@ -100,7 +109,7 @@ router.post('/registrar', authController.registrar);
  *       500:
  *         description: Error del servidor
  */
-router.post('/login', authController.login);
+router.post('/login', loginLimiter, authController.login);
 
 /**
  * @swagger
@@ -126,5 +135,6 @@ router.post('/login', authController.login);
  *         description: Usuario no encontrado
  */
 router.get('/perfil', authMiddleware, authController.obtenerPerfil);
+router.post('/cambiar-password', authMiddleware, authController.cambiarPassword);
 
 module.exports = router;

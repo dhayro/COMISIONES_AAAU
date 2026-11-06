@@ -1,10 +1,12 @@
+const logger = require('../shared/logger');
 const CertificacionCredito = require('../models/CertificacionCredito');
+const { respuestaError500 } = require('../shared/errores');
 
 // ========== CERTIFICACIONES PRINCIPALES ==========
 
 exports.crear = async (req, res) => {
   try {
-    const { nota, mes, fecha_aprobacion, fecha_documento, estado_certificacion, tipo_documento, numero_documento, justificacion, meta_id, fuente_financiamiento_id, monto_certificado } = req.body;
+    const { nota, mes, fecha_aprobacion, fecha_documento, estado_certificacion, tipo_documento, numero_documento, justificacion, meta_id, fuente_financiamiento_id, monto_certificado, detalles_raw } = req.body;
     const usuario_id = req.user.id;
 
     if (!nota || !mes || !tipo_documento || !numero_documento) {
@@ -19,9 +21,9 @@ exports.crear = async (req, res) => {
     );
 
     if (existentes.length > 0) {
-      return res.status(409).json({ 
+      return res.status(409).json({
         error: 'Ya existe una certificación con esta combinación de Nota, Mes y Número de Documento',
-        certificacion_id: existentes[0].id 
+        certificacion_id: existentes[0].id
       });
     }
 
@@ -40,9 +42,54 @@ exports.crear = async (req, res) => {
       monto_certificado
     });
 
-    res.status(201).json({ id: certificacion_id, message: 'Certificación creada exitosamente' });
+    // 🆕 Si vienen detalles extraídos, guardarlos también
+    let detalles_guardados = 0;
+    if (detalles_raw && Array.isArray(detalles_raw) && detalles_raw.length > 0) {
+      try {
+        for (const detalle of detalles_raw) {
+          // Buscar o crear el clasificador
+          let [clasificadores] = await pool.query(
+            'SELECT id FROM clasificadores WHERE partida = ? AND activo = 1 LIMIT 1',
+            [detalle.partida_db]
+          );
+
+          let clasificador_id = null;
+          if (clasificadores.length > 0) {
+            clasificador_id = clasificadores[0].id;
+          } else {
+            // Crear clasificador si no existe
+            const [insertResult] = await pool.query(
+              'INSERT INTO clasificadores (partida, nombre, descripcion, activo) VALUES (?, ?, ?, 1)',
+              [detalle.partida_db, detalle.descripcion.substring(0, 100), detalle.descripcion]
+            );
+            clasificador_id = insertResult.insertId;
+            logger.info(`✓ Clasificador creado: ${detalle.partida_db}`);
+          }
+
+          // Insertar detalle de certificación
+          if (clasificador_id) {
+            await pool.query(
+              'INSERT INTO detalles_certificacion_credito (certificacion_credito_id, clasificador_id, monto, monto_utilizado) VALUES (?, ?, ?, 0)',
+              [certificacion_id, clasificador_id, detalle.monto || 0]
+            );
+            detalles_guardados++;
+            logger.info(`✓ Detalle guardado: ${detalle.descripcion} - S/. ${detalle.monto}`);
+          }
+        }
+        logger.info(`✅ ${detalles_guardados} detalles guardados exitosamente`);
+      } catch (detalleError) {
+        logger.error('⚠️ Error guardando detalles:', detalleError.message);
+        // No lanzar error, la certificación ya se creó
+      }
+    }
+
+    res.status(201).json({
+      id: certificacion_id,
+      message: 'Certificación creada exitosamente',
+      detalles_guardados
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -57,7 +104,7 @@ exports.obtenerPorId = async (req, res) => {
 
     res.json(certificacion);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -81,14 +128,14 @@ exports.listar = async (req, res) => {
     const certificaciones = await CertificacionCredito.listar(filtros, userContext);
     res.json(certificaciones);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
 exports.actualizar = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nota, mes, fecha_aprobacion, fecha_documento, estado_certificacion, tipo_documento, numero_documento, justificacion, meta_id, fuente_financiamiento_id, monto_certificado } = req.body;
+    const { nota, mes, fecha_aprobacion, fecha_documento, estado_certificacion, tipo_documento, numero_documento, justificacion, meta_id, fuente_financiamiento_id, monto_certificado, detalles_raw } = req.body;
 
     const actualizada = await CertificacionCredito.actualizar(id, {
       nota,
@@ -108,9 +155,58 @@ exports.actualizar = async (req, res) => {
       return res.status(404).json({ error: 'Certificación no encontrada' });
     }
 
-    res.json({ message: 'Certificación actualizada exitosamente' });
+    // 🆕 Si vienen detalles extraídos, guardarlos también
+    if (detalles_raw && Array.isArray(detalles_raw) && detalles_raw.length > 0) {
+      const { pool } = require('../config/database');
+
+      try {
+        // Primero, eliminar detalles existentes (para reemplazarlos con los nuevos)
+        await pool.query('DELETE FROM detalles_certificacion_credito WHERE certificacion_credito_id = ?', [id]);
+        logger.info(`✓ Detalles anteriores eliminados para certificación ${id}`);
+
+        // Luego, insertar los nuevos detalles
+        for (const detalle of detalles_raw) {
+          // Buscar o crear el clasificador
+          let [clasificadores] = await pool.query(
+            'SELECT id FROM clasificadores WHERE partida = ? AND activo = 1 LIMIT 1',
+            [detalle.partida_db]
+          );
+
+          let clasificador_id = null;
+          if (clasificadores.length > 0) {
+            clasificador_id = clasificadores[0].id;
+          } else {
+            // Crear clasificador si no existe
+            const [insertResult] = await pool.query(
+              'INSERT INTO clasificadores (partida, nombre, descripcion, activo) VALUES (?, ?, ?, 1)',
+              [detalle.partida_db, detalle.descripcion.substring(0, 100), detalle.descripcion]
+            );
+            clasificador_id = insertResult.insertId;
+            logger.info(`✓ Clasificador creado: ${detalle.partida_db}`);
+          }
+
+          // Insertar detalle de certificación
+          if (clasificador_id) {
+            await pool.query(
+              'INSERT INTO detalles_certificacion_credito (certificacion_credito_id, clasificador_id, monto, monto_utilizado) VALUES (?, ?, ?, 0)',
+              [id, clasificador_id, detalle.monto || 0]
+            );
+            logger.info(`✓ Detalle guardado: ${detalle.descripcion} - S/. ${detalle.monto}`);
+          }
+        }
+        logger.info(`✅ Todos los detalles guardados exitosamente`);
+      } catch (detalleError) {
+        logger.error('⚠️ Error guardando detalles:', detalleError.message);
+        // No lanzar error, continuar (la certificación ya se actualizó)
+      }
+    }
+
+    res.json({
+      message: 'Certificación actualizada exitosamente',
+      detalles_guardados: detalles_raw ? detalles_raw.length : 0
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -125,7 +221,7 @@ exports.eliminar = async (req, res) => {
 
     res.json({ message: 'Certificación eliminada exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -147,7 +243,7 @@ exports.crearDetalle = async (req, res) => {
 
     res.status(201).json({ id: detalle_id, message: 'Detalle creado exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -162,7 +258,7 @@ exports.obtenerDetallePorId = async (req, res) => {
 
     res.json(detalle);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -182,7 +278,7 @@ exports.actualizarDetalle = async (req, res) => {
 
     res.json({ message: 'Detalle actualizado exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -197,7 +293,7 @@ exports.eliminarDetalle = async (req, res) => {
 
     res.json({ message: 'Detalle eliminado exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -207,7 +303,17 @@ exports.listarDetalles = async (req, res) => {
     const detalles = await CertificacionCredito.listarDetalles(certificacion_credito_id);
     res.json(detalles);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
+  }
+};
+
+exports.listarFormatos = async (req, res) => {
+  try {
+    const { certificacion_credito_id } = req.params;
+    const formatos = await CertificacionCredito.listarFormatos(certificacion_credito_id);
+    res.json(formatos);
+  } catch (error) {
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -217,6 +323,6 @@ exports.obtenerTotalMonto = async (req, res) => {
     const total = await CertificacionCredito.obtenerTotalMonto(certificacion_credito_id);
     res.json({ total });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };

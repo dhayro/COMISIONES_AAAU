@@ -1,4 +1,6 @@
+const logger = require('../shared/logger');
 const { pool } = require('../config/database');
+const { respuestaError500 } = require('../shared/errores');
 
 // Obtener comisiones pendientes de aprobación
 exports.obtenerPendientesAprobacion = async (req, res) => {
@@ -40,8 +42,8 @@ exports.obtenerPendientesAprobacion = async (req, res) => {
 
     res.json(comisiones);
   } catch (error) {
-    console.error('Error al obtener comisiones pendientes:', error);
-    res.status(500).json({ error: error.message });
+    logger.error('Error al obtener comisiones pendientes:', error);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -73,8 +75,8 @@ exports.obtenerHistorialAprobaciones = async (req, res) => {
 
     res.json(aprobaciones);
   } catch (error) {
-    console.error('Error al obtener historial:', error);
-    res.status(500).json({ error: error.message });
+    logger.error('Error al obtener historial:', error);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -107,8 +109,8 @@ exports.aprobarComision = async (req, res) => {
       message: 'Comisión aprobada correctamente' 
     });
   } catch (error) {
-    console.error('Error al aprobar comisión:', error);
-    res.status(500).json({ error: error.message });
+    logger.error('Error al aprobar comisión:', error);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -141,8 +143,8 @@ exports.rechazarComision = async (req, res) => {
       message: 'Comisión rechazada correctamente' 
     });
   } catch (error) {
-    console.error('Error al rechazar comisión:', error);
-    res.status(500).json({ error: error.message });
+    logger.error('Error al rechazar comisión:', error);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -171,7 +173,7 @@ exports.obtenerEstadisticas = async (req, res) => {
 
     res.json(stats[0]);
   } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
-    res.status(500).json({ error: error.message });
+    logger.error('Error al obtener estadísticas:', error);
+    res.status(500).json(respuestaError500(error));
   }
 };

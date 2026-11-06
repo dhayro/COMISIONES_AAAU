@@ -1,4 +1,6 @@
+const logger = require('../shared/logger');
 const Proveedor = require('../models/Proveedor');
+const { respuestaError500 } = require('../shared/errores');
 
 exports.listar = async (req, res) => {
   try {
@@ -10,7 +12,7 @@ exports.listar = async (req, res) => {
     const proveedores = await Proveedor.listar(filtros);
     return res.json({ proveedores });
   } catch (error) {
-    console.error('❌ Error listar Proveedor:', error);
+    logger.error('❌ Error listar Proveedor:', error);
     return res.status(500).json({ error: 'Error al listar proveedores' });
   }
 };
@@ -31,6 +33,14 @@ exports.crear = async (req, res) => {
       return res.status(400).json({ error: 'razon_social es requerido' });
     }
 
+    if (ruc_dni) {
+      const { pool } = require('../config/database');
+      const [existentes] = await pool.query('SELECT id FROM proveedores WHERE ruc_dni = ? LIMIT 1', [ruc_dni]);
+      if (existentes.length > 0) {
+        return res.status(409).json({ error: `Ya existe un proveedor con RUC/DNI ${ruc_dni}` });
+      }
+    }
+
     const creado = await Proveedor.crear({
       razon_social,
       ruc_dni,
@@ -43,8 +53,8 @@ exports.crear = async (req, res) => {
 
     return res.status(201).json({ success: true, proveedor: creado });
   } catch (error) {
-    console.error('❌ Error crear Proveedor:', error);
-    return res.status(500).json({ error: 'Error al crear proveedor', details: error.message });
+    logger.error('❌ Error crear Proveedor:', error);
+    return res.status(500).json(respuestaError500(error, 'Error al crear proveedor'));
   }
 };
 
@@ -55,8 +65,8 @@ exports.obtener = async (req, res) => {
     if (!p) return res.status(404).json({ error: 'Proveedor no encontrado' });
     return res.json({ proveedor: p });
   } catch (error) {
-    console.error('❌ Error obtener Proveedor:', error);
-    return res.status(500).json({ error: 'Error al obtener proveedor', details: error.message });
+    logger.error('❌ Error obtener Proveedor:', error);
+    return res.status(500).json(respuestaError500(error, 'Error al obtener proveedor'));
   }
 };
 
@@ -69,8 +79,8 @@ exports.actualizar = async (req, res) => {
     const actualizado = await Proveedor.obtenerPorId(id);
     return res.json({ success: true, proveedor: actualizado });
   } catch (error) {
-    console.error('❌ Error actualizar Proveedor:', error);
-    return res.status(500).json({ error: 'Error al actualizar proveedor', details: error.message });
+    logger.error('❌ Error actualizar Proveedor:', error);
+    return res.status(500).json(respuestaError500(error, 'Error al actualizar proveedor'));
   }
 };
 
@@ -80,7 +90,7 @@ exports.eliminar = async (req, res) => {
     await Proveedor.eliminar(id);
     return res.json({ success: true, message: 'Proveedor desactivado' });
   } catch (error) {
-    console.error('❌ Error eliminar Proveedor:', error);
-    return res.status(500).json({ error: 'Error al eliminar proveedor', details: error.message });
+    logger.error('❌ Error eliminar Proveedor:', error);
+    return res.status(500).json(respuestaError500(error, 'Error al eliminar proveedor'));
   }
 };

@@ -1,0 +1,18 @@
+{
+  "presets": ["react-app"],
+  "plugins": [],
+  "env": {
+    "development": {
+      "compact": false,
+      "retainLines": true
+    }
+  },
+  "overrides": [
+    {
+      "test": ".svg",
+      "compact": true
+    }
+  ]
+}
+
+

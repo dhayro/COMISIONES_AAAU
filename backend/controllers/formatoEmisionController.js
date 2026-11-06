@@ -1,4 +1,7 @@
+const logger = require('../shared/logger');
+const { recalcularDetalles, detallesDeFormato } = require('../shared/presupuesto');
 const FormatoEmision = require('../models/FormatoEmision');
+const { respuestaError500 } = require('../shared/errores');
 
 // ========== FUNCIÓN CRÍTICA: SINCRONIZAR MONTO_UTILIZADO ==========
 
@@ -26,7 +29,7 @@ const FormatoEmision = require('../models/FormatoEmision');
       // Comparar: ¿tienen el mismo cantidad y montos?
       if (detallesActuales.length !== detalles.length) {
         detallesChangieron = true;
-        console.log(`🔄 Cantidad de detalles cambió: ${detallesActuales.length} → ${detalles.length}`);
+        logger.info(`🔄 Cantidad de detalles cambió: ${detallesActuales.length} → ${detalles.length}`);
       } else {
         // Verificar si los montos son diferentes
         const montosIguales = detallesActuales.every((actual, idx) => 
@@ -36,7 +39,7 @@ const FormatoEmision = require('../models/FormatoEmision');
         
         if (!montosIguales) {
           detallesChangieron = true;
-          console.log(`🔄 Montos o clasificadores en detalles cambiaron`);
+          logger.info(`🔄 Montos o clasificadores en detalles cambiaron`);
         }
       }
     } else if (detalles && Array.isArray(detalles) && detalles.length > 0) {
@@ -44,14 +47,14 @@ const FormatoEmision = require('../models/FormatoEmision');
       detallesChangieron = true;
     }
 
-    console.log(`\n🔍 Evaluando detalles: cambió_certificacion=${huboChangioCertificacion}, detalles_realmente_cambiaron=${detallesChangieron}`);tificación, montos, etc)
+    logger.info(`\n🔍 Evaluando detalles: cambió_certificacion=${huboChangioCertificacion}, detalles_realmente_cambiaron=${detallesChangieron}`);tificación, montos, etc)
  * 3. Se ELIMINA un formato
  */
 async function sincronizarMontoUtilizado(formatoId = null) {
   const { pool } = require('../config/database');
   
   try {
-    console.log(`\n🔄 SINCRONIZANDO MONTO_UTILIZADO ${formatoId ? '(Formato: ' + formatoId + ')' : '(TODO)'}...`);
+    logger.info(`\n🔄 SINCRONIZANDO MONTO_UTILIZADO ${formatoId ? '(Formato: ' + formatoId + ')' : '(TODO)'}...`);
     
     // Obtener todos los detalles de certificación que podrían estar afectados
     let query = `
@@ -76,7 +79,7 @@ async function sincronizarMontoUtilizado(formatoId = null) {
     
     const [detallesACertificar] = await pool.query(query, params);
     
-    console.log(`📋 Detalles encontrados para sincronizar: ${detallesACertificar.length}`);
+    logger.info(`📋 Detalles encontrados para sincronizar: ${detallesACertificar.length}`);
     
     // Para cada detalle, recalcular su monto_utilizado
     for (const { id: detalleId } of detallesACertificar) {
@@ -96,13 +99,13 @@ async function sincronizarMontoUtilizado(formatoId = null) {
         [nuevoMontoUtilizado, detalleId]
       );
       
-      console.log(`✅ Detalle ${detalleId}: monto_utilizado = S/. ${nuevoMontoUtilizado}`);
+      logger.info(`✅ Detalle ${detalleId}: monto_utilizado = S/. ${nuevoMontoUtilizado}`);
     }
     
-    console.log(`✅ SINCRONIZACIÓN COMPLETADA\n`);
+    logger.info(`✅ SINCRONIZACIÓN COMPLETADA\n`);
     
   } catch (error) {
-    console.error(`❌ Error en sincronización:`, error.message);
+    logger.error(`❌ Error en sincronización:`, error.message);
     // No lanzar error, solo reportar
   }
 }
@@ -114,7 +117,7 @@ exports.normalizarEstados = async (req, res) => {
   try {
     const { pool } = require('../config/database');
     
-    console.log('🔧 NORMALIZANDO ESTADOS DE FORMATOS...');
+    logger.info('🔧 NORMALIZANDO ESTADOS DE FORMATOS...');
     
     // 1️⃣ Formatos con certificacion_id que están en BORRADOR → EMITIDO
     const [result1] = await pool.query(
@@ -122,7 +125,7 @@ exports.normalizarEstados = async (req, res) => {
        SET estado_emision = 'EMITIDO'
        WHERE certificacion_id IS NOT NULL AND estado_emision = 'BORRADOR'`
     );
-    console.log(`✅ Formatos cambiados de BORRADOR → EMITIDO: ${result1.changedRows}`);
+    logger.info(`✅ Formatos cambiados de BORRADOR → EMITIDO: ${result1.changedRows}`);
     
     // 2️⃣ Formatos SIN certificacion_id pero en EMITIDO → BORRADOR
     const [result2] = await pool.query(
@@ -130,7 +133,7 @@ exports.normalizarEstados = async (req, res) => {
        SET estado_emision = 'BORRADOR'
        WHERE certificacion_id IS NULL AND estado_emision = 'EMITIDO'`
     );
-    console.log(`✅ Formatos cambiados de EMITIDO → BORRADOR: ${result2.changedRows}`);
+    logger.info(`✅ Formatos cambiados de EMITIDO → BORRADOR: ${result2.changedRows}`);
     
     res.json({
       message: 'Estados normalizados correctamente',
@@ -140,8 +143,8 @@ exports.normalizarEstados = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Error al normalizar estados:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al normalizar estados:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -243,16 +246,11 @@ exports.crear = async (req, res) => {
         
         // 🆕 Actualizar monto_utilizado en detalles_certificacion_credito
         if (detalle.detalles_certificacion_credito_id) {
-          await pool.query(
-            `UPDATE detalles_certificacion_credito 
-             SET monto_utilizado = monto_utilizado + ?
-             WHERE id = ?`,
-            [detalle.monto || 0, detalle.detalles_certificacion_credito_id]
-          );
-          console.log(`✅ Monto utilizado actualizado para detalle ${detalle.detalles_certificacion_credito_id}: +S/. ${detalle.monto}`);
+          await recalcularDetalles([detalle.detalles_certificacion_credito_id]);
+          logger.info(`✅ Monto utilizado actualizado para detalle ${detalle.detalles_certificacion_credito_id}: +S/. ${detalle.monto}`);
         }
       }
-      console.log(`✅ Guardados ${detalles.length} detalles para formato ${formatoId}`);
+      logger.info(`✅ Guardados ${detalles.length} detalles para formato ${formatoId}`);
     }
 
     // 🆕 SINCRONIZAR MONTO_UTILIZADO
@@ -265,8 +263,8 @@ exports.crear = async (req, res) => {
       detalles_guardados: detalles ? detalles.length : 0
     });
   } catch (error) {
-    console.error('❌ Error al crear formato:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al crear formato:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -281,8 +279,8 @@ exports.obtenerPorId = async (req, res) => {
 
     res.json(formato);
   } catch (error) {
-    console.error('❌ Error al obtener formato:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al obtener formato:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -307,12 +305,13 @@ exports.listar = async (req, res) => {
       formatos
     });
   } catch (error) {
-    console.error('❌ Error al listar formatos:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al listar formatos:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
 exports.actualizar = async (req, res) => {
+  const idsAfectados = [];
   try {
     const { pool } = require('../config/database');
     const { id } = req.params;
@@ -343,9 +342,9 @@ exports.actualizar = async (req, res) => {
       detalles
     } = req.body;
 
-    console.log(`🔄 ACTUALIZAR FORMATO ID: ${id}`);
-    console.log(`📝 certificacion_id: ${certificacion_id}, fuente_financiamiento_id: ${fuente_financiamiento_id}`);
-    console.log(`📊 detalles recibidos: ${detalles ? detalles.length : 0}`);
+    logger.info(`🔄 ACTUALIZAR FORMATO ID: ${id}`);
+    logger.info(`📝 certificacion_id: ${certificacion_id}, fuente_financiamiento_id: ${fuente_financiamiento_id}`);
+    logger.info(`📊 detalles recibidos: ${detalles ? detalles.length : 0}`);
 
     // 1️⃣ VALIDACIÓN: Obtener formato anterior
     const [formatoAnterior] = await pool.query(
@@ -362,8 +361,8 @@ exports.actualizar = async (req, res) => {
     const certificacion_nueva = certificacion_id !== undefined ? certificacion_id : certificacion_anterior;
     const meta_nueva = meta_id !== undefined ? meta_id : meta_anterior;
 
-    console.log(`🔍 Cambio de certificación: ${certificacion_anterior} → ${certificacion_nueva}`);
-    console.log(`🔍 Cambio de meta: ${meta_anterior} → ${meta_nueva}`);
+    logger.info(`🔍 Cambio de certificación: ${certificacion_anterior} → ${certificacion_nueva}`);
+    logger.info(`🔍 Cambio de meta: ${meta_anterior} → ${meta_nueva}`);
 
     // 2️⃣ VALIDACIÓN: Si cambió de certificación, validar que pertenezca a la meta
     if (certificacion_anterior !== certificacion_nueva && certificacion_nueva !== null) {
@@ -375,7 +374,7 @@ exports.actualizar = async (req, res) => {
       if (!certEnMeta || certEnMeta.length === 0) {
         throw new Error(`Certificación ${certificacion_nueva} NO pertenece a la meta ${meta_nueva}`);
       }
-      console.log(`✅ Validación OK: Certificación ${certificacion_nueva} pertenece a meta ${meta_nueva}`);
+      logger.info(`✅ Validación OK: Certificación ${certificacion_nueva} pertenece a meta ${meta_nueva}`);
     }
 
     // 3️⃣ CONSTRUIR OBJETO DE ACTUALIZACIÓN
@@ -408,42 +407,45 @@ exports.actualizar = async (req, res) => {
     
     // Obtener valores actuales (para si no se están actualizando)
     const [formatoActual] = await pool.query(
-      `SELECT numero_siaf, numero_cut FROM formato_emisiones WHERE id = ?`,
+      `SELECT numero_siaf, numero_cut, estado_emision FROM formato_emisiones WHERE id = ?`,
       [id]
     );
     
     const siaf = numero_siaf !== undefined ? numero_siaf : (formatoActual[0]?.numero_siaf || null);
     const cut = numero_cut !== undefined ? numero_cut : (formatoActual[0]?.numero_cut || null);
     
-    console.log(`🔍 Evaluando estado: SIAF="${siaf}", CUT="${cut}"`);
+    logger.info(`🔍 Evaluando estado: SIAF="${siaf}", CUT="${cut}"`);
     
     if (siaf && siaf.trim()) {
       // Si hay numero_siaf → PAGADO
       nuevoEstado = 'PAGADO';
-      console.log('💰 Tiene SIAF → PAGADO');
+      logger.info('💰 Tiene SIAF → PAGADO');
     } else if (cut && cut.trim()) {
       // Si NO hay numero_siaf pero hay numero_cut → ENVIADO
       nuevoEstado = 'ENVIADO';
-      console.log('📧 Tiene CUT (sin SIAF) → ENVIADO');
+      logger.info('📧 Tiene CUT (sin SIAF) → ENVIADO');
     } else if (certificacion_nueva !== null) {
       // Si NO hay CUT ni SIAF pero hay certificación → EMITIDO
       nuevoEstado = 'EMITIDO';
-      console.log('📄 Tiene CERTIFICACIÓN (sin CUT/SIAF) → EMITIDO');
+      logger.info('📄 Tiene CERTIFICACIÓN (sin CUT/SIAF) → EMITIDO');
     } else {
       // Sin nada → BORRADOR
       nuevoEstado = 'BORRADOR';
-      console.log('⚪ Sin certificación/CUT/SIAF → BORRADOR');
+      logger.info('⚪ Sin certificación/CUT/SIAF → BORRADOR');
     }
     
+    if (['RENDIDO', 'RINDIENDO', 'DEVUELTO'].includes(formatoActual[0]?.estado_emision)) {
+      nuevoEstado = formatoActual[0].estado_emision;
+    }
     datosActualizacion.estado_emision = nuevoEstado;
-    console.log(`📌 Estado calculado: ${datosActualizacion.estado_emision}`);
+    logger.info(`📌 Estado calculado: ${datosActualizacion.estado_emision}`);
 
     // 4️⃣ ACTUALIZAR EL FORMATO PRINCIPAL
     const actualizado = await FormatoEmision.actualizar(id, datosActualizacion);
     if (!actualizado) {
       return res.status(404).json({ error: 'Formato no encontrado o sin cambios' });
     }
-    console.log(`✅ Formato ${id} actualizado`);
+    logger.info(`✅ Formato ${id} actualizado`);
 
     // 5️⃣ PROCESAR DETALLES - SOLO SI HAY CAMBIOS
     let detallesActualizados = 0;
@@ -452,11 +454,11 @@ exports.actualizar = async (req, res) => {
     const detallesChangieron = detalles && Array.isArray(detalles) && detalles.length > 0;
     const huboChangioCertificacion = certificacion_anterior !== certificacion_nueva;
 
-    console.log(`\n� Evaluando detalles: cambió_certificacion=${huboChangioCertificacion}, hay_detalles_en_request=${detallesChangieron}`);
+    logger.info(`\n� Evaluando detalles: cambió_certificacion=${huboChangioCertificacion}, hay_detalles_en_request=${detallesChangieron}`);
 
     // �🔥 CRÍTICO: Manejar cambios de certificación ANTES de eliminar
     if (huboChangioCertificacion) {
-      console.log(`\n🔴 CAMBIO DE CERTIFICACIÓN DETECTADO: ${certificacion_anterior} → ${certificacion_nueva}`);
+      logger.info(`\n🔴 CAMBIO DE CERTIFICACIÓN DETECTADO: ${certificacion_anterior} → ${certificacion_nueva}`);
       
       // Obtener detalles ANTIGUOS que tenían certificación (para RESTAR)
       const [detallesAntiguosConCert] = await pool.query(
@@ -466,35 +468,30 @@ exports.actualizar = async (req, res) => {
         [id]
       );
       
-      console.log(`📋 Detalles antiguos encontrados: ${detallesAntiguosConCert.length}`);
+      logger.info(`📋 Detalles antiguos encontrados: ${detallesAntiguosConCert.length}`);
       
       // RESTAR monto_utilizado de cada detalle ANTIGUO
       for (const { detalles_certificacion_credito_id, monto } of detallesAntiguosConCert) {
-        await pool.query(
-          `UPDATE detalles_certificacion_credito 
-           SET monto_utilizado = GREATEST(0, monto_utilizado - ?)
-           WHERE id = ?`,
-          [monto || 0, detalles_certificacion_credito_id]
-        );
-        console.log(`  ✅ RESTAR de Detalle ${detalles_certificacion_credito_id}: -S/. ${monto}`);
+        idsAfectados.push(detalles_certificacion_credito_id);
+        logger.info(`  ✅ RESTAR de Detalle ${detalles_certificacion_credito_id}: -S/. ${monto}`);
       }
       
-      console.log(`✅ Montos restados de detalles antiguos\n`);
+      logger.info(`✅ Montos restados de detalles antiguos\n`);
     }
 
     // 🆕 SOLO procesar detalles si: (1) cambió certificación O (2) hay detalles nuevos en request
     if (huboChangioCertificacion || detallesChangieron) {
-      console.log(`\n📝 PROCESANDO DETALLES (Cambio de certificación: ${huboChangioCertificacion}, Detalles en request: ${detallesChangieron})`);
+      logger.info(`\n📝 PROCESANDO DETALLES (Cambio de certificación: ${huboChangioCertificacion}, Detalles en request: ${detallesChangieron})`);
 
       if (detallesChangieron) {
-        console.log(`📋 Procesando ${detalles.length} detalles...`);
+        logger.info(`📋 Procesando ${detalles.length} detalles...`);
 
         // Eliminar todos los detalles antiguos
         const [deleteResult] = await pool.query(
           `DELETE FROM formato_emisiones_detalles WHERE formato_emision_id = ?`,
           [id]
         );
-        console.log(`🗑️ Eliminados ${deleteResult.affectedRows} detalles antiguos`);
+        logger.info(`🗑️ Eliminados ${deleteResult.affectedRows} detalles antiguos`);
 
         // Insertar detalles nuevos
         for (const detalle of detalles) {
@@ -511,7 +508,7 @@ exports.actualizar = async (req, res) => {
 
             if (detallesCert && detallesCert.length > 0) {
               detallesCertId = detallesCert[0].id;
-              console.log(`  ✅ Auto-mapeo: clasificador ${detalle.clasificador_id} → detalles_cert_id ${detallesCertId}`);
+              logger.info(`  ✅ Auto-mapeo: clasificador ${detalle.clasificador_id} → detalles_cert_id ${detallesCertId}`);
             }
           }
 
@@ -532,37 +529,33 @@ exports.actualizar = async (req, res) => {
 
           // 🆕 SUMAR monto_utilizado a detalles NUEVOS (si existe referencia)
           if (detallesCertId !== null && certificacion_nueva !== null) {
-            await pool.query(
-              `UPDATE detalles_certificacion_credito 
-               SET monto_utilizado = monto_utilizado + ?
-               WHERE id = ?`,
-              [detalle.monto || 0, detallesCertId]
-            );
-            console.log(`  ✅ SUMAR a Detalle ${detallesCertId}: +S/. ${detalle.monto}`);
+            idsAfectados.push(detallesCertId);
+            logger.info(`  ✅ SUMAR a Detalle ${detallesCertId}: +S/. ${detalle.monto}`);
           }
 
           detallesActualizados++;
         }
-        console.log(`✅ ${detallesActualizados} detalles insertados\n`);
+        logger.info(`✅ ${detallesActualizados} detalles insertados\n`);
       } else {
         // Si cambió certificación pero NO hay detalles nuevos en request
-        console.log(`⚠️ Certificación cambió pero sin detalles en request - no procesando detalles`);
+        logger.info(`⚠️ Certificación cambió pero sin detalles en request - no procesando detalles`);
       }
     } else {
       // Si NO cambió certificación y NO hay detalles nuevos, no hacer nada con detalles
-      console.log(`ℹ️ Sin cambios en certificación ni detalles - no procesando`);
+      logger.info(`ℹ️ Sin cambios en certificación ni detalles - no procesando`);
     }
 
+    await recalcularDetalles([...idsAfectados, ...(await detallesDeFormato(id))]);
     // 6️⃣ YA NO NECESITAMOS SINCRONIZAR (ya lo hicimos manualmente arriba)
-    console.log(`✅ Detalles procesados correctamente - SINCRONIZACIÓN NO NECESARIA`);
+    logger.info(`✅ Detalles procesados correctamente - SINCRONIZACIÓN NO NECESARIA`);
 
     res.json({
       message: 'Formato actualizado exitosamente',
       detalles_actualizados: detallesActualizados
     });
   } catch (error) {
-    console.error('❌ Error al actualizar formato:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al actualizar formato:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -577,8 +570,8 @@ exports.eliminar = async (req, res) => {
 
     res.json({ message: 'Formato eliminado exitosamente' });
   } catch (error) {
-    console.error('❌ Error al eliminar formato:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al eliminar formato:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -618,8 +611,8 @@ exports.obtenerDetalles = async (req, res) => {
       total: detalles?.length || 0
     });
   } catch (error) {
-    console.error('❌ Error al obtener detalles del formato:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al obtener detalles del formato:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -655,8 +648,8 @@ exports.agregarDetalle = async (req, res) => {
       message: 'Detalle agregado exitosamente' 
     });
   } catch (error) {
-    console.error('❌ Error al agregar detalle:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al agregar detalle:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -667,15 +660,15 @@ exports.repararMontosUtilizados = async (req, res) => {
   try {
     const { pool } = require('../config/database');
     
-    console.log('\n🔧 INICIANDO REPARACIÓN DE MONTOS UTILIZADOS...\n');
+    logger.info('\n🔧 INICIANDO REPARACIÓN DE MONTOS UTILIZADOS...\n');
     
     // 1️⃣ Primero, resetear todos los monto_utilizado a 0
-    console.log('📊 Paso 1: Reseteando todos los monto_utilizado a 0');
+    logger.info('📊 Paso 1: Reseteando todos los monto_utilizado a 0');
     await pool.query(`UPDATE detalles_certificacion_credito SET monto_utilizado = 0`);
-    console.log('✅ Todos los monto_utilizado reseteados a 0');
+    logger.info('✅ Todos los monto_utilizado reseteados a 0');
     
     // 2️⃣ Recalcular basado en detalles reales
-    console.log('\n📊 Paso 2: Recalculando monto_utilizado desde formato_emisiones_detalles');
+    logger.info('\n📊 Paso 2: Recalculando monto_utilizado desde formato_emisiones_detalles');
     const [detallesConMonto] = await pool.query(`
       SELECT 
         dcc.id as detalles_cert_id,
@@ -686,7 +679,7 @@ exports.repararMontosUtilizados = async (req, res) => {
       GROUP BY dcc.id
     `);
     
-    console.log(`📋 Encontrados ${detallesConMonto.length} detalles de certificación con montos`);
+    logger.info(`📋 Encontrados ${detallesConMonto.length} detalles de certificación con montos`);
     
     let totalActualizado = 0;
     for (const item of detallesConMonto) {
@@ -696,12 +689,12 @@ exports.repararMontosUtilizados = async (req, res) => {
          WHERE id = ?`,
         [item.monto_total || 0, item.detalles_cert_id]
       );
-      console.log(`✅ Detalle ${item.detalles_cert_id}: monto_utilizado = S/. ${item.monto_total}`);
+      logger.info(`✅ Detalle ${item.detalles_cert_id}: monto_utilizado = S/. ${item.monto_total}`);
       totalActualizado++;
     }
     
-    console.log(`\n✅ REPARACIÓN COMPLETADA`);
-    console.log(`📊 Total detalles actualizados: ${totalActualizado}`);
+    logger.info(`\n✅ REPARACIÓN COMPLETADA`);
+    logger.info(`📊 Total detalles actualizados: ${totalActualizado}`);
     
     res.json({
       success: true,
@@ -709,8 +702,8 @@ exports.repararMontosUtilizados = async (req, res) => {
       detalles_actualizados: totalActualizado
     });
   } catch (error) {
-    console.error('❌ Error en reparación:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error en reparación:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -719,7 +712,7 @@ exports.diagnosticoMontos = async (req, res) => {
   try {
     const { pool } = require('../config/database');
     
-    console.log('\n🔍 DIAGNÓSTICO DE MONTOS\n');
+    logger.info('\n🔍 DIAGNÓSTICO DE MONTOS\n');
     
     // Obtener resumen de detalles_certificacion_credito
     const [resumenCerts] = await pool.query(`
@@ -738,8 +731,8 @@ exports.diagnosticoMontos = async (req, res) => {
       ORDER BY dcc.certificacion_credito_id, dcc.id
     `);
     
-    console.log('📊 ESTADO ACTUAL DE DETALLES CERTIFICACIÓN:');
-    console.log('─'.repeat(100));
+    logger.info('📊 ESTADO ACTUAL DE DETALLES CERTIFICACIÓN:');
+    logger.info('─'.repeat(100));
     
     let discrepancias = [];
     for (const item of resumenCerts) {
@@ -758,11 +751,11 @@ exports.diagnosticoMontos = async (req, res) => {
           diferencia: (esperado - actual).toFixed(2),
           num_formatos: item.num_formatos_asociados
         });
-        console.log(`⚠️  ID: ${item.id} | Cert: ${item.certificacion_credito_id} | Clase: ${item.clasificador_id}`);
-        console.log(`   Esperado: S/. ${esperado.toFixed(2)} | Actual: S/. ${actual.toFixed(2)} | Diferencia: S/. ${(esperado - actual).toFixed(2)}`);
+        logger.info(`⚠️  ID: ${item.id} | Cert: ${item.certificacion_credito_id} | Clase: ${item.clasificador_id}`);
+        logger.info(`   Esperado: S/. ${esperado.toFixed(2)} | Actual: S/. ${actual.toFixed(2)} | Diferencia: S/. ${(esperado - actual).toFixed(2)}`);
       } else {
-        console.log(`✅ ID: ${item.id} | Cert: ${item.certificacion_credito_id} | Clase: ${item.clasificador_id}`);
-        console.log(`   Monto: S/. ${item.monto.toFixed(2)} | Utilizado: S/. ${actual.toFixed(2)} | Saldo: S/. ${item.saldo_disponible.toFixed(2)}`);
+        logger.info(`✅ ID: ${item.id} | Cert: ${item.certificacion_credito_id} | Clase: ${item.clasificador_id}`);
+        logger.info(`   Monto: S/. ${item.monto.toFixed(2)} | Utilizado: S/. ${actual.toFixed(2)} | Saldo: S/. ${item.saldo_disponible.toFixed(2)}`);
       }
     }
     
@@ -773,8 +766,8 @@ exports.diagnosticoMontos = async (req, res) => {
       todos_los_detalles: resumenCerts
     });
   } catch (error) {
-    console.error('❌ Error en diagnóstico:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error en diagnóstico:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -783,7 +776,71 @@ exports.obtenerProximoNumero = async (req, res) => {
     const numeroDocumento = await FormatoEmision.obtenerProximoNumeroDocumento();
     res.json({ numero_documento: numeroDocumento });
   } catch (error) {
-    console.error('❌ Error al obtener número:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error al obtener número:', error.message);
+    res.status(500).json(respuestaError500(error));
+  }
+};
+
+// PATCH /api/formatos-emisiones/:id/siaf-cut
+// Actualiza SIAF y CUT. RENDIDO conserva su estado; los demás se recalculan igual que en PUT.
+exports.actualizarSiafCut = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { numero_siaf, numero_cut } = req.body;
+
+    const formato = await FormatoEmision.obtenerPorId(id);
+    if (!formato) {
+      return res.status(404).json({ error: 'Formato no encontrado' });
+    }
+
+    const digitosSiaf = String(numero_siaf || '').replace(/\D/g, '');
+    const siaf = digitosSiaf ? digitosSiaf.slice(0, 10).padStart(10, '0') : null;
+    const cut = String(numero_cut || '').trim() || null;
+
+    let estado = formato.estado_emision;
+    if (!['RENDIDO', 'RINDIENDO', 'DEVUELTO'].includes(estado)) {
+      if (siaf) estado = 'PAGADO';
+      else if (cut) estado = 'ENVIADO';
+      else estado = formato.certificacion_id ? 'EMITIDO' : 'BORRADOR';
+    }
+
+    await FormatoEmision.actualizar(id, { numero_siaf: siaf, numero_cut: cut, estado_emision: estado });
+    await recalcularDetalles(await detallesDeFormato(id));
+
+    res.json({ success: true, numero_siaf: siaf, numero_cut: cut });
+  } catch (error) {
+    logger.error('❌ Error al actualizar SIAF/CUT:', error.message);
+    res.status(500).json(respuestaError500(error));
+  }
+};
+
+// POST /api/formatos-emisiones/:id/devolucion
+// Devolución total del viático: cierra el formato como DEVUELTO con motivo (no cuenta para vencimiento)
+exports.registrarDevolucion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const motivo = String(req.body?.motivo || '').trim();
+    if (!motivo) {
+      return res.status(400).json({ error: 'El motivo de la devolución es obligatorio' });
+    }
+
+    const formato = await FormatoEmision.obtenerPorId(id);
+    if (!formato) {
+      return res.status(404).json({ error: 'Formato no encontrado' });
+    }
+    if (!['ENVIADO', 'PAGADO'].includes(formato.estado_emision)) {
+      return res.status(400).json({ error: 'Solo se puede devolver un viático en estado ENVIADO o PAGADO' });
+    }
+
+    const { pool } = require('../config/database');
+    await pool.query(
+      'UPDATE formato_emisiones SET estado_emision = ?, motivo_devolucion = ?, fecha_devolucion = NOW() WHERE id = ?',
+      ['DEVUELTO', motivo, id]
+    );
+
+    res.json({ success: true, estado_emision: 'DEVUELTO' });
+  } catch (error) {
+    logger.error('❌ Error al registrar devolución:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };

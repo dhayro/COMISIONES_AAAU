@@ -1,3 +1,5 @@
+const logger = require('../shared/logger');
+const { lanzarNavegador } = require('../shared/navegador');
 const PDFDocument = require('pdfkit');
 const { PassThrough } = require('stream');
 const { PDFDocument: PDFLibDocument } = require('pdf-lib');
@@ -212,7 +214,7 @@ exports.generarPDFComision = async (req, res) => {
       return res.status(400).json({ error: "Datos de comisión requeridos" });
     }
 
-    console.log("=== GENERANDO PDF CON PUPPETEER EN LANDSCAPE ===");
+    logger.info("=== GENERANDO PDF CON PUPPETEER EN LANDSCAPE ===");
 
     const comision = comision_data;
     const enLetras = new EnLetras();
@@ -359,10 +361,7 @@ exports.generarPDFComision = async (req, res) => {
     `;
 
     // Generar PDF con Puppeteer
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    const browser = await lanzarNavegador(puppeteer);
 
     const page = await browser.newPage();
     await page.setContent(htmlContent, { waitUntil: 'networkidle2' });
@@ -383,13 +382,14 @@ exports.generarPDFComision = async (req, res) => {
       `attachment; filename="comision_${comision_id}_${Date.now()}.pdf"`
     );
 
-    console.log("✅ PDF LANDSCAPE generado exitosamente con Puppeteer");
+    logger.info("✅ PDF LANDSCAPE generado exitosamente con Puppeteer");
 
     res.send(pdfBuffer);
 
   } catch (err) {
-    console.error("Error generando PDF:", err);
-    res.status(500).json({ error: `Error al generar PDF: ${err.message}` });
+    logger.error("Error generando PDF:", err);
+    logger.error('Error al generar PDF:', err);
+    res.status(500).json({ error: 'Error al generar PDF' });
   }
 };
 
@@ -530,8 +530,9 @@ exports.generarPDFMultipleComisiones = async (req, res) => {
 
     doc.end();
   } catch (err) {
-    console.error("Error generando PDF:", err);
-    res.status(500).json({ error: `Error al generar PDF: ${err.message}` });
+    logger.error("Error generando PDF:", err);
+    logger.error('Error al generar PDF:', err);
+    res.status(500).json({ error: 'Error al generar PDF' });
   }
 };
 
@@ -549,7 +550,7 @@ async function findMetaIdByNumero(numeroMeta, connection) {
     );
     return results.length > 0 ? results[0].id : null;
   } catch (error) {
-    console.error('❌ Error buscando meta:', error.message);
+    logger.error('❌ Error buscando meta:', error.message);
     return null;
   }
 }
@@ -569,7 +570,7 @@ async function findFuenteIdByNombre(fuenteText, connection) {
     );
     return results.length > 0 ? results[0].id : null;
   } catch (error) {
-    console.error('❌ Error buscando fuente:', error.message);
+    logger.error('❌ Error buscando fuente:', error.message);
     return null;
   }
 }
@@ -588,7 +589,7 @@ async function findClasificadorIdByPartida(partida, connection) {
     );
     return results.length > 0 ? results[0].id : null;
   } catch (error) {
-    console.error('❌ Error buscando clasificador:', error.message);
+    logger.error('❌ Error buscando clasificador:', error.message);
     return null;
   }
 }
@@ -621,7 +622,7 @@ exports.extractCertificationPdf = async (req, res) => {
     if (req.file) {
       pdfBuffer = req.file.buffer;
       pdfPath = req.file.originalname;
-      console.log('📤 PDF desde upload:', pdfPath);
+      logger.info('📤 PDF desde upload:', pdfPath);
     }
     // CASO 2: Ruta existente (application/json)
     else if (req.body.rutaPdf && req.body.procesarDesdeServidor) {
@@ -631,7 +632,7 @@ exports.extractCertificationPdf = async (req, res) => {
       // Construir ruta completa
       const rutaCompleta = path.join(__dirname, '..', req.body.rutaPdf);
       
-      console.log('💾 PDF desde servidor:', rutaCompleta);
+      logger.info('💾 PDF desde servidor:', rutaCompleta);
       
       // Verificar que el archivo existe
       if (!fs.existsSync(rutaCompleta)) {
@@ -644,7 +645,7 @@ exports.extractCertificationPdf = async (req, res) => {
       // Leer archivo
       pdfBuffer = fs.readFileSync(rutaCompleta);
       pdfPath = path.basename(rutaCompleta);
-      console.log('✅ PDF cargado desde disco:', pdfPath, '(' + pdfBuffer.length + ' bytes)');
+      logger.info('✅ PDF cargado desde disco:', pdfPath, '(' + pdfBuffer.length + ' bytes)');
     }
     else {
       return res.status(400).json({ 
@@ -661,7 +662,7 @@ exports.extractCertificationPdf = async (req, res) => {
     const tempDir = os.tmpdir();
     const tempPath = path.join(tempDir, `temp_${Date.now()}_${Math.random().toString(36).substring(7)}.pdf`);
     
-    console.log('📝 Archivo temporal:', tempPath);
+    logger.info('📝 Archivo temporal:', tempPath);
     fs.writeFileSync(tempPath, pdfBuffer);
     
     // Parsear PDF
@@ -709,14 +710,14 @@ exports.extractCertificationPdf = async (req, res) => {
     try {
       fs.unlinkSync(tempPath);
     } catch (e) {
-      console.warn('⚠️  No se pudo eliminar archivo temporal:', tempPath);
+      logger.warn('⚠️  No se pudo eliminar archivo temporal:', tempPath);
     }
     
     const textUppercase = allText.toUpperCase();
     const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-    console.log('✓ PDF procesado:', parser.data?.Pages?.length || 0, 'páginas');
-    console.log('📝 Primeros 100 caracteres:', allText.substring(0, 100).replace(/\n/g, ' '));
+    logger.info('✓ PDF procesado:', parser.data?.Pages?.length || 0, 'páginas');
+    logger.info('📝 Primeros 100 caracteres:', allText.substring(0, 100).replace(/\n/g, ' '));
 
     // Extraer información del PDF
     const extractedData = {
@@ -743,16 +744,10 @@ exports.extractCertificationPdf = async (req, res) => {
     };
 
     // 🔍 ENRIQUECER CON IDs DE BASE DE DATOS
-    let connection = null;
     try {
-      connection = await mysql.createConnection({
-        host: process.env.DB_HOST,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME,
-      });
+      const { pool } = require('../config/database');
 
-      console.log('✅ Conexión a BD establecida para enriquecimiento');
+      logger.info('✅ Conexión a BD establecida para enriquecimiento');
 
       // 1️⃣ Buscar meta_id (AHORA CON FILTRO POR PERIODO/AÑO)
       if (extractedData.meta_info && extractedData.meta_info.numero) {
@@ -772,32 +767,32 @@ exports.extractCertificationPdf = async (req, res) => {
         // Si aún no tenemos período, usar el año actual como fallback
         if (!periodoBusqueda) {
           periodoBusqueda = new Date().getFullYear().toString();
-          console.log(`⚠️  No se extrajo período, usando año actual: ${periodoBusqueda}`);
+          logger.info(`⚠️  No se extrajo período, usando año actual: ${periodoBusqueda}`);
         }
         
-        console.log(`🔍 Buscando meta con numero_meta = "${metaNumero}" Y periodo = "${periodoBusqueda}"`);
+        logger.info(`🔍 Buscando meta con numero_meta = "${metaNumero}" Y periodo = "${periodoBusqueda}"`);
         
         // ✅ BUSCA POR NUMERO + PERIODO (para permitir metas con mismo número en años diferentes)
-        const [metas] = await connection.query(
+        const [metas] = await pool.query(
           'SELECT id, nombre, numero_meta, periodo FROM metas WHERE numero_meta = ? AND periodo = ? LIMIT 1',
           [metaNumero, periodoBusqueda]
         );
-        
+
         if (metas.length > 0) {
           extractedData.meta_info.id = metas[0].id;
           extractedData.meta_info.periodo = metas[0].periodo;
           extractedData.meta_id = metas[0].id;
-          console.log(`✅ Meta encontrada: ID=${metas[0].id} | Número=${metas[0].numero_meta} | Período=${metas[0].periodo}`);
+          logger.info(`✅ Meta encontrada: ID=${metas[0].id} | Número=${metas[0].numero_meta} | Período=${metas[0].periodo}`);
         } else {
-          console.log(`⚠️  Meta no encontrada para numero="${metaNumero}" en período "${periodoBusqueda}"`);
+          logger.info(`⚠️  Meta no encontrada para numero="${metaNumero}" en período "${periodoBusqueda}"`);
           // Intentar búsqueda alternativa: solo por número (último recurso)
-          console.log(`   Intentando búsqueda alternativa: solo por número...`);
-          const [metasAlternativa] = await connection.query(
+          logger.info(`   Intentando búsqueda alternativa: solo por número...`);
+          const [metasAlternativa] = await pool.query(
             'SELECT id, nombre, numero_meta, periodo FROM metas WHERE numero_meta = ? ORDER BY periodo DESC LIMIT 1',
             [metaNumero]
           );
           if (metasAlternativa.length > 0) {
-            console.log(`   ⚠️  Meta encontrada en período alternativo: ${metasAlternativa[0].periodo}`);
+            logger.info(`   ⚠️  Meta encontrada en período alternativo: ${metasAlternativa[0].periodo}`);
             extractedData.meta_info.id = metasAlternativa[0].id;
             extractedData.meta_info.periodo = metasAlternativa[0].periodo;
             extractedData.meta_id = metasAlternativa[0].id;
@@ -807,36 +802,36 @@ exports.extractCertificationPdf = async (req, res) => {
 
       // 2️⃣ Buscar fuente_financiamiento completa
       if (extractedData.fuente_info) {
-        console.log(`🔍 Buscando fuente con nombre LIKE "%${extractedData.fuente_info}%"`);
-        const [fuentes] = await connection.query(
+        logger.info(`🔍 Buscando fuente con nombre LIKE "%${extractedData.fuente_info}%"`);
+        const [fuentes] = await pool.query(
           'SELECT id, nombre FROM fuentes_financiamiento WHERE nombre LIKE ? LIMIT 1',
           [`%${extractedData.fuente_info}%`]
         );
         if (fuentes.length > 0) {
           extractedData.fuente_info_full = fuentes[0]; // { id, nombre }
           extractedData.fuente_financiamiento_id = fuentes[0].id;
-          console.log(`✅ Fuente encontrada: ID=${fuentes[0].id}`);
+          logger.info(`✅ Fuente encontrada: ID=${fuentes[0].id}`);
         } else {
-          console.log(`⚠️  Fuente no encontrada para "${extractedData.fuente_info}"`);
+          logger.info(`⚠️  Fuente no encontrada para "${extractedData.fuente_info}"`);
         }
       }
 
       // 3️⃣ Enriquecer detalles con clasificador_id
       if (extractedData.detalles_raw && Array.isArray(extractedData.detalles_raw)) {
-        console.log(`🔍 Enriqueciendo ${extractedData.detalles_raw.length} detalles con clasificadores`);
+        logger.info(`🔍 Enriqueciendo ${extractedData.detalles_raw.length} detalles con clasificadores`);
         for (const detalle of extractedData.detalles_raw) {
           // Buscar clasificador por partida
-          let [clasificadores] = await connection.query(
+          let [clasificadores] = await pool.query(
             'SELECT id, nombre FROM clasificadores WHERE partida = ? AND activo = 1 LIMIT 1',
             [detalle.partida_db]
           );
-          
+
           // Si no existe, crear la partida automáticamente
           if (clasificadores.length === 0) {
-            console.log(`  📝 Creando nueva partida: "${detalle.partida_db}" - ${detalle.descripcion}`);
-            
+            logger.info(`  📝 Creando nueva partida: "${detalle.partida_db}" - ${detalle.descripcion}`);
+
             try {
-              await connection.query(
+              await pool.query(
                 'INSERT INTO clasificadores (partida, nombre, descripcion, activo) VALUES (?, ?, ?, 1)',
                 [
                   detalle.partida_db,
@@ -844,21 +839,21 @@ exports.extractCertificationPdf = async (req, res) => {
                   detalle.descripcion.substring(0, 200)
                 ]
               );
-              
+
               // Buscar el ID recién creado
-              [clasificadores] = await connection.query(
+              [clasificadores] = await pool.query(
                 'SELECT id, nombre FROM clasificadores WHERE partida = ? AND activo = 1 LIMIT 1',
                 [detalle.partida_db]
               );
               
               if (clasificadores.length > 0) {
-                console.log(`  ✅ Partida creada con éxito | ID=${clasificadores[0].id}`);
+                logger.info(`  ✅ Partida creada con éxito | ID=${clasificadores[0].id}`);
               }
             } catch (insertError) {
-              console.log(`  ❌ Error creando partida: ${insertError.message}`);
+              logger.info(`  ❌ Error creando partida: ${insertError.message}`);
             }
           } else {
-            console.log(`  ✅ Partida encontrada: "${detalle.partida_db}" | ID=${clasificadores[0].id}`);
+            logger.info(`  ✅ Partida encontrada: "${detalle.partida_db}" | ID=${clasificadores[0].id}`);
           }
           
           if (clasificadores.length > 0) {
@@ -866,17 +861,13 @@ exports.extractCertificationPdf = async (req, res) => {
             detalle.clasificador_nombre = clasificadores[0].nombre;
           }
         }
-        console.log(`✅ Detalles enriquecidos`);
+        logger.info(`✅ Detalles enriquecidos`);
       }
 
-      console.log('✅ Datos enriquecidos con IDs de BD');
+      logger.info('✅ Datos enriquecidos con IDs de BD');
     } catch (dbError) {
-      console.warn('⚠️  Error enriqueciendo datos de BD:', dbError.message);
+      logger.warn('⚠️  Error enriqueciendo datos de BD:', dbError.message);
       // No lanzar error, continuar con datos sin enriquecer
-    } finally {
-      if (connection) {
-        await connection.end();
-      }
     }
 
     // Convertir fechas de DD/MM/YYYY a YYYY-MM-DD
@@ -897,7 +888,7 @@ exports.extractCertificationPdf = async (req, res) => {
       data: extractedData
     });
   } catch (error) {
-    console.error('❌ Error en extracción PDF:', error.message);
+    logger.error('❌ Error en extracción PDF:', error.message);
     res.status(500).json({
       success: false,
       error: error.message
@@ -1229,15 +1220,14 @@ exports.guardarCertificacionPdf = async (req, res) => {
     const fs = require('fs');
     const path = require('path');
     
-    console.log('=== GUARDAR PDF EN CARPETA ===');
-    console.log('Body:', req.body);
-    console.log('File:', req.file ? { fieldname: req.file.fieldname, mimetype: req.file.mimetype, size: req.file.size } : 'NO FILE');
+    logger.info('=== GUARDAR PDF EN CARPETA ===');
+    logger.info('File:', req.file ? { fieldname: req.file.fieldname, mimetype: req.file.mimetype, size: req.file.size } : 'NO FILE');
     
     const { certificacion_id } = req.body;
     const archivo = req.file;
 
     if (!archivo) {
-      console.error('ERROR: No se proporcionó archivo PDF');
+      logger.error('ERROR: No se proporcionó archivo PDF');
       return res.status(400).json({ 
         success: false, 
         error: 'No se proporcionó archivo PDF'
@@ -1245,7 +1235,7 @@ exports.guardarCertificacionPdf = async (req, res) => {
     }
 
     if (!certificacion_id) {
-      console.error('ERROR: No se proporcionó ID de certificación');
+      logger.error('ERROR: No se proporcionó ID de certificación');
       return res.status(400).json({ 
         success: false, 
         error: 'No se proporcionó ID de certificación'
@@ -1254,7 +1244,7 @@ exports.guardarCertificacionPdf = async (req, res) => {
 
     // Validar MIME type
     if (archivo.mimetype !== 'application/pdf') {
-      console.error('ERROR: Archivo no es PDF');
+      logger.error('ERROR: Archivo no es PDF');
       return res.status(400).json({ 
         success: false, 
         error: 'Solo se permiten archivos PDF'
@@ -1264,7 +1254,7 @@ exports.guardarCertificacionPdf = async (req, res) => {
     // Validar tamaño máximo (100 MB)
     const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
     if (archivo.size > MAX_SIZE) {
-      console.error('ERROR: Archivo demasiado grande');
+      logger.error('ERROR: Archivo demasiado grande');
       return res.status(400).json({ 
         success: false, 
         error: `Archivo muy grande. Máximo permitido: 100 MB (actual: ${(archivo.size / 1024 / 1024).toFixed(2)} MB)`
@@ -1283,12 +1273,12 @@ exports.guardarCertificacionPdf = async (req, res) => {
     // Asegurar que la carpeta existe
     if (!fs.existsSync(rutaCarpeta)) {
       fs.mkdirSync(rutaCarpeta, { recursive: true });
-      console.log('✓ Carpeta creada:', rutaCarpeta);
+      logger.info('✓ Carpeta creada:', rutaCarpeta);
     }
 
     // Guardar archivo en disco
     fs.writeFileSync(rutaCompleta, archivo.buffer);
-    console.log('✓ Archivo guardado en disco:', rutaCompleta);
+    logger.info('✓ Archivo guardado en disco:', rutaCompleta);
 
     // Actualizar la certificación con la ruta del archivo
     const rutaRelativa = `uploads/certificaciones/${nombreArchivo}`;
@@ -1299,12 +1289,12 @@ exports.guardarCertificacionPdf = async (req, res) => {
       [rutaRelativa, archivo.originalname, certificacion_id]
     );
 
-    console.log('UPDATE result:', { affectedRows: result.affectedRows });
+    logger.info('UPDATE result:', { affectedRows: result.affectedRows });
 
     if (result.affectedRows === 0) {
       // Eliminar archivo si no se pudo actualizar la BD
       fs.unlinkSync(rutaCompleta);
-      console.error('ERROR: Certificación no encontrada con ID:', certificacion_id);
+      logger.error('ERROR: Certificación no encontrada con ID:', certificacion_id);
       return res.status(404).json({ 
         success: false, 
         error: 'Certificación no encontrada',
@@ -1312,7 +1302,7 @@ exports.guardarCertificacionPdf = async (req, res) => {
       });
     }
 
-    console.log('✓ PDF guardado exitosamente para certificación:', certificacion_id);
+    logger.info('✓ PDF guardado exitosamente para certificación:', certificacion_id);
     res.status(200).json({
       success: true,
       message: 'PDF guardado exitosamente',
@@ -1324,7 +1314,7 @@ exports.guardarCertificacionPdf = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('ERROR CRÍTICO al guardar PDF:', err);
+    logger.error('ERROR CRÍTICO al guardar PDF:', err);
     res.status(500).json({
       success: false,
       error: `Error al guardar PDF: ${err.message}`,
@@ -1364,7 +1354,7 @@ exports.descargarCertificacionPdf = async (req, res) => {
 
     // Validar que el archivo existe
     if (!fs.existsSync(rutaCompleta)) {
-      console.error('ERROR: Archivo no existe en:', rutaCompleta);
+      logger.error('ERROR: Archivo no existe en:', rutaCompleta);
       return res.status(404).json({ 
         success: false, 
         error: 'Archivo no encontrado en el servidor' 
@@ -1379,12 +1369,31 @@ exports.descargarCertificacionPdf = async (req, res) => {
     res.setHeader('Content-Length', archivo.length);
     res.send(archivo);
     
-    console.log('✓ PDF descargado:', nombre_archivo_pdf);
+    logger.info('✓ PDF descargado:', nombre_archivo_pdf);
   } catch (err) {
-    console.error('Error descargando PDF:', err);
+    logger.error('Error descargando PDF:', err);
     res.status(500).json({
       success: false,
       error: `Error al descargar PDF: ${err.message}`
     });
   }
+};
+
+// GET /api/pdf/archivo-certificacion?ruta=uploads/certificaciones/...
+// Sirve PDFs de certificaciones con JWT, en lugar de exponer /uploads
+exports.servirArchivoCertificacion = (req, res) => {
+  const path = require('path');
+  const fs = require('fs');
+  const base = path.resolve(__dirname, '..', 'uploads');
+  const relativa = String(req.query.ruta || '').replace(/^\/?uploads[\/]/, '');
+  const absoluta = path.resolve(base, relativa);
+
+  if (!absoluta.startsWith(base + path.sep) || path.extname(absoluta).toLowerCase() !== '.pdf') {
+    return res.status(400).json({ error: 'Ruta de archivo no válida' });
+  }
+  if (!fs.existsSync(absoluta)) {
+    return res.status(404).json({ error: 'Archivo no encontrado' });
+  }
+  res.type('application/pdf');
+  res.sendFile(absoluta);
 };

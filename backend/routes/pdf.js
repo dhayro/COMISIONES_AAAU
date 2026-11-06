@@ -54,5 +54,6 @@ router.post('/guardar-certificacion-pdf', authMiddleware, upload.single('archivo
  * @param {Number} certificacion_id - ID de la certificación
  */
 router.get('/descargar-certificacion/:certificacion_id', authMiddleware, pdfController.descargarCertificacionPdf);
+router.get('/archivo-certificacion', authMiddleware, pdfController.servirArchivoCertificacion);
 
 module.exports = router;

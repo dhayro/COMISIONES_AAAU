@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 /**
  * Modelo para gestionar rutas (viajes)
  */
@@ -31,7 +32,7 @@ const convertirAHoraLima = (fecha) => {
     }
     return fecha;
   } catch (error) {
-    console.warn('⚠️ Error al convertir fecha a Lima:', error);
+    logger.warn('⚠️ Error al convertir fecha a Lima:', error);
     return fecha;
   }
 };
@@ -40,10 +41,10 @@ class Ruta {
   /**
    * Crear una nueva ruta
    */
-  static async crear(datos) {
+  static async crear(datos, conn) {
     let connection;
     try {
-      connection = await pool.getConnection();
+      connection = conn || await pool.getConnection();
       
       const {
         formato_emision_id,
@@ -87,10 +88,10 @@ class Ruta {
         updated_at: new Date()
       };
     } catch (error) {
-      console.error('❌ Error al crear ruta:', error);
+      logger.error('❌ Error al crear ruta:', error);
       throw error;
     } finally {
-      if (connection) connection.release();
+      if (connection && !conn) connection.release();
     }
   }
 
@@ -119,7 +120,7 @@ class Ruta {
         updated_at: convertirAHoraLima(ruta.updated_at)
       }));
     } catch (error) {
-      console.error('❌ Error al obtener rutas:', error);
+      logger.error('❌ Error al obtener rutas:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -149,7 +150,7 @@ class Ruta {
         updated_at: convertirAHoraLima(ruta.updated_at)
       };
     } catch (error) {
-      console.error('❌ Error al obtener ruta:', error);
+      logger.error('❌ Error al obtener ruta:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -181,7 +182,7 @@ class Ruta {
 
       return { id, ...datos, updated_at: new Date() };
     } catch (error) {
-      console.error('❌ Error al actualizar ruta:', error);
+      logger.error('❌ Error al actualizar ruta:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -201,7 +202,7 @@ class Ruta {
       
       return result.affectedRows > 0;
     } catch (error) {
-      console.error('❌ Error al eliminar ruta:', error);
+      logger.error('❌ Error al eliminar ruta:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -211,20 +212,20 @@ class Ruta {
   /**
    * Eliminar todas las rutas de un formato
    */
-  static async eliminarPorFormato(formato_emision_id) {
+  static async eliminarPorFormato(formato_emision_id, conn) {
     let connection;
     try {
-      connection = await pool.getConnection();
+      connection = conn || await pool.getConnection();
       
       const sql = `DELETE FROM rutas WHERE formato_emision_id = ?`;
       const [result] = await connection.query(sql, [formato_emision_id]);
       
       return result.affectedRows;
     } catch (error) {
-      console.error('❌ Error al eliminar rutas por formato:', error);
+      logger.error('❌ Error al eliminar rutas por formato:', error);
       throw error;
     } finally {
-      if (connection) connection.release();
+      if (connection && !conn) connection.release();
     }
   }
 
@@ -265,7 +266,7 @@ class Ruta {
         updated_at: convertirAHoraLima(ruta.updated_at)
       }));
     } catch (error) {
-      console.error('❌ Error al listar rutas por formato:', error);
+      logger.error('❌ Error al listar rutas por formato:', error);
       throw error;
     } finally {
       if (connection) connection.release();

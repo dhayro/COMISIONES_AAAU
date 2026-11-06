@@ -1,7 +1,7 @@
+const logger = require('../shared/logger');
+const { respuestaError500 } = require('../shared/errores');
 const Rendicion = require('../models/Rendicion');
-const Proveedor = require('../models/Proveedor');
-const TipoComprobante = require('../models/TipoComprobante');
-const FormatoEmision = require('../models/FormatoEmision');
+const rendicionService = require('../services/rendicionService');
 const Ruta = require('../models/Ruta');  // 🆕 Importar modelo de Ruta
 
 /**
@@ -9,234 +9,28 @@ const Ruta = require('../models/Ruta');  // 🆕 Importar modelo de Ruta
  */
 
 // POST /api/rendiciones/crear
-// 🆕 Acepta ARRAY de comprobantes para crear rendiciones en tabla existente
-// 🔄 ACTUALIZADO: Soporta creación, actualización y eliminación de comprobantes
+// Crea, actualiza o finaliza una rendición. La lógica y la transacción viven en rendicionService.
 exports.crearRendicion = async (req, res) => {
   try {
-    const {
-      formato_emision_id,
-      comprobantes, // Array antiguo (para compatibilidad)
-      comprobantes_nuevos,
-      comprobantes_actualizar,
-      comprobantes_eliminar,
-      modo, // 'crear' o 'actualizar'
-    } = req.body;
-
-    // Validaciones básicas
-    if (!formato_emision_id) {
-      return res.status(400).json({ error: 'formato_emision_id es requerido' });
-    }
-
-    // Validar formato
-    const formato = await FormatoEmision.obtenerPorId(formato_emision_id);
-    if (!formato) {
-      return res.status(404).json({ error: 'Formato no encontrado' });
-    }
-
-    // 🔄 LÓGICA ACTUALIZADA
-    let comprobantesGuardados = [];
-    let totalMonto = 0;
-
-    if (modo === 'actualizar') {
-      // MODO ACTUALIZACIÓN: RENDIDO → RENDIDO (modificar rendición existente)
-      console.log('🔄 Modo ACTUALIZAR - Procesando cambios en rendición existente');
-
-      // 1️⃣ Eliminar comprobantes marcados
-      if (Array.isArray(comprobantes_eliminar) && comprobantes_eliminar.length > 0) {
-        for (const idRendicion of comprobantes_eliminar) {
-          await Rendicion.eliminar(idRendicion);
-          console.log(`❌ Comprobante ${idRendicion} eliminado`);
-        }
-      }
-
-      // 2️⃣ Actualizar comprobantes existentes
-      if (Array.isArray(comprobantes_actualizar) && comprobantes_actualizar.length > 0) {
-        for (const comprobante of comprobantes_actualizar) {
-          const datosActualizar = {
-            tipo_comprobante_id: comprobante.tipo_comprobante_id || null,
-            proveedor_id: comprobante.proveedor_id || null,
-            numero_comprobante: comprobante.numero_comprobante || null,
-            fecha_comprobante: comprobante.fecha_comprobante || null,
-            monto: parseFloat(comprobante.monto) || 0,
-            tipo_viatitico: comprobante.tipo_viatico || null,
-            observacion_rechazo: comprobante.observaciones || null,
-            orden: comprobante.orden || null,
-          };
-
-          await Rendicion.actualizar(comprobante.id, datosActualizar);
-          comprobantesGuardados.push(comprobante);
-          totalMonto += parseFloat(comprobante.monto) || 0;
-          console.log(`✏️ Comprobante ${comprobante.id} actualizado con orden ${comprobante.orden}`);
-        }
-      }
-
-      // 3️⃣ Agregar nuevos comprobantes
-      if (Array.isArray(comprobantes_nuevos) && comprobantes_nuevos.length > 0) {
-        for (const comprobante of comprobantes_nuevos) {
-          const datosComprobante = {
-            formato_emision_id: formato_emision_id,
-            formato_emisiones_detalles_id: comprobante.formato_emision_detalle_id,
-            tipo_comprobante_id: comprobante.tipo_comprobante_id || null,
-            proveedor_id: comprobante.proveedor_id || null,
-            numero_comprobante: comprobante.numero_comprobante || null,
-            fecha_comprobante: comprobante.fecha_comprobante || null,
-            monto: parseFloat(comprobante.monto) || 0,
-            tipo_viatitico: comprobante.tipo_viatico || null,
-            estado_rendicion: 'PENDIENTE',
-            orden: comprobante.orden || Date.now(),
-          };
-
-          const comprobanteSaved = await Rendicion.crear(datosComprobante);
-          comprobantesGuardados.push(comprobanteSaved);
-          totalMonto += parseFloat(comprobante.monto) || 0;
-          console.log(`➕ Nuevo comprobante ${comprobanteSaved.id} creado con orden ${comprobante.orden}`);
-        }
-      }
-
-      // Mantener estado en RENDIDO y actualizar fecha_rendicion
-      const { fecha_rendicion } = req.body;
-      // 🆕 Si no viene fecha_rendicion, usar fecha actual de Lima (UTC-5)
-      let fechaRendicionFinal = fecha_rendicion;
-      if (!fechaRendicionFinal) {
-        const ahora = new Date();
-        const offsetLocal = ahora.getTimezoneOffset(); // en minutos
-        const offsetLima = 300; // Lima UTC-5 (300 minutos atrás de UTC)
-        const diferencia = (offsetLocal - offsetLima) * 60 * 1000;
-        const fechaLima = new Date(ahora.getTime() + diferencia);
-
-        // Formatear manualmente usando hora local ajustada
-        const año = fechaLima.getFullYear();
-        const mes = String(fechaLima.getMonth() + 1).padStart(2, '0');
-        const día = String(fechaLima.getDate()).padStart(2, '0');
-        const horas = String(fechaLima.getHours()).padStart(2, '0');
-        const minutos = String(fechaLima.getMinutes()).padStart(2, '0');
-        const segundos = String(fechaLima.getSeconds()).padStart(2, '0');
-        const ms = String(fechaLima.getMilliseconds()).padStart(3, '0');
-        fechaRendicionFinal = `${año}-${mes}-${día} ${horas}:${minutos}:${segundos}`;
-      }
-
-      await FormatoEmision.actualizar(formato_emision_id, {
-        estado_emision: 'RENDIDO',
-        fecha_rendicion: fechaRendicionFinal
-      });
-      console.log('📋 Estado del formato mantenido en RENDIDO');
-
-      // 🆕 Actualizar rutas si existen
-      const { rutas } = req.body;
-      if (Array.isArray(rutas) && rutas.length > 0) {
-        // Primero, eliminar rutas antiguas del formato
-        await Ruta.eliminarPorFormato(formato_emision_id);
-        console.log('🗑️ Rutas antiguas eliminadas');
-
-        // Luego, crear las nuevas rutas
-        for (const ruta of rutas) {
-          await Ruta.crear({
-            formato_emision_id: formato_emision_id,
-            origen: ruta.origen,
-            fecha_salida: ruta.fecha_salida,
-            destino: ruta.destino,
-            fecha_llegada: ruta.fecha_llegada,
-          });
-          console.log(`✅ Ruta creada: ${ruta.origen} → ${ruta.destino}`);
-        }
-      }
-
-    } else {
-      // MODO CREACIÓN: ENVIADO → RENDIDO (primera rendición)
-      console.log('✨ Modo CREAR - Primera rendición del formato');
-
-      if (formato.estado_emision !== 'ENVIADO' && formato.estado_emision !== 'PAGADO') {
-        return res.status(400).json({ error: 'Solo se pueden rendir formatos en estado ENVIADO o PAGADO' });
-      }
-
-      // Usar array antiguo o nuevo según lo que llegue
-      const comprobantesACrear = comprobantes || comprobantes_nuevos || [];
-
-      if (!Array.isArray(comprobantesACrear) || comprobantesACrear.length === 0) {
-        return res.status(400).json({ error: 'Se requiere al menos un comprobante' });
-      }
-
-      // 🆕 Insertar cada comprobante
-      for (const comprobante of comprobantesACrear) {
-        const datosComprobante = {
-          formato_emision_id: formato_emision_id,
-          formato_emisiones_detalles_id: comprobante.formato_emision_detalle_id,
-          tipo_comprobante_id: comprobante.tipo_comprobante_id || null,
-          proveedor_id: comprobante.proveedor_id || null,
-          numero_comprobante: comprobante.numero_comprobante || null,
-          fecha_comprobante: comprobante.fecha_comprobante || null,
-          monto: parseFloat(comprobante.monto) || 0,
-          tipo_viatitico: comprobante.tipo_viatico || null,
-          estado_rendicion: 'PENDIENTE',
-          orden: comprobante.orden || Date.now(),
-        };
-
-        const comprobanteSaved = await Rendicion.crear(datosComprobante);
-        comprobantesGuardados.push(comprobanteSaved);
-        totalMonto += parseFloat(comprobante.monto) || 0;
-      }
-
-      // 🆕 Cambiar estado de formato a RENDIDO y guardar fecha_rendicion
-      const { fecha_rendicion } = req.body;
-      // 🆕 Si no viene fecha_rendicion, usar fecha actual de Lima (UTC-5)
-      let fechaRendicionFinal = fecha_rendicion;
-      if (!fechaRendicionFinal) {
-        const ahora = new Date();
-        const offsetLocal = ahora.getTimezoneOffset(); // en minutos
-        const offsetLima = 300; // Lima UTC-5 (300 minutos atrás de UTC)
-        const diferencia = (offsetLocal - offsetLima) * 60 * 1000;
-        const fechaLima = new Date(ahora.getTime() + diferencia);
-
-        // Formatear manualmente usando hora local ajustada
-        const año = fechaLima.getFullYear();
-        const mes = String(fechaLima.getMonth() + 1).padStart(2, '0');
-        const día = String(fechaLima.getDate()).padStart(2, '0');
-        const horas = String(fechaLima.getHours()).padStart(2, '0');
-        const minutos = String(fechaLima.getMinutes()).padStart(2, '0');
-        const segundos = String(fechaLima.getSeconds()).padStart(2, '0');
-        const ms = String(fechaLima.getMilliseconds()).padStart(3, '0');
-        fechaRendicionFinal = `${año}-${mes}-${día} ${horas}:${minutos}:${segundos}`;
-      }
-
-      await FormatoEmision.actualizar(formato_emision_id, {
-        estado_emision: 'RENDIDO',
-        fecha_rendicion: fechaRendicionFinal
-      });
-      console.log('✅ Formato cambiado a estado RENDIDO');
-
-      // 🆕 Guardar rutas si existen
-      const { rutas } = req.body;
-      if (Array.isArray(rutas) && rutas.length > 0) {
-        for (const ruta of rutas) {
-          await Ruta.crear({
-            formato_emision_id: formato_emision_id,
-            origen: ruta.origen,
-            fecha_salida: ruta.fecha_salida,
-            destino: ruta.destino,
-            fecha_llegada: ruta.fecha_llegada,
-          });
-          console.log(`✅ Ruta creada: ${ruta.origen} → ${ruta.destino}`);
-        }
-      }
-    }
-
+    const resultado = await rendicionService.crearRendicion(req.body);
     return res.status(201).json({
       success: true,
-      message: modo === 'actualizar' ? '✅ Rendición actualizada correctamente' : '✅ Rendición creada correctamente',
+      message: resultado.modo === 'actualizar' ? '✅ Rendición actualizada correctamente' : '✅ Rendición creada correctamente',
       rendicion: {
-        formato_emision_id: formato_emision_id,
-        comprobantes_guardados: comprobantesGuardados.length,
-        total_monto: totalMonto,
-        id: comprobantesGuardados[0]?.id || null,
+        formato_emision_id: resultado.formato_emision_id,
+        comprobantes_guardados: resultado.comprobantesGuardados.length,
+        total_monto: resultado.totalMonto,
+        id: resultado.comprobantesGuardados[0]?.id || null,
       },
     });
   } catch (error) {
-    console.error('❌ Error en crearRendicion:', error);
-    return res.status(500).json({ error: 'Error al crear rendición', details: error.message });
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    return res.status(500).json(respuestaError500(error, 'Error al crear rendición'));
   }
 };
 
-// GET /api/rendiciones/listar
 exports.listarRendiciones = async (req, res) => {
   try {
     const { formato_emision_id } = req.query;
@@ -250,8 +44,8 @@ exports.listarRendiciones = async (req, res) => {
     const rows = await Rendicion.listarPorFormato(null); // implementar método general si se quiere
     return res.json({ rendiciones: rows });
   } catch (error) {
-    console.error('❌ Error en listarRendiciones:', error);
-    return res.status(500).json({ error: 'Error al listar rendiciones', details: error.message });
+    logger.error('❌ Error en listarRendiciones:', error);
+    return res.status(500).json(respuestaError500(error, 'Error al listar rendiciones'));
   }
 };
 
@@ -263,8 +57,8 @@ exports.obtenerRendicion = async (req, res) => {
     if (!rend) return res.status(404).json({ error: 'Rendición no encontrada' });
     return res.json({ rendicion: rend });
   } catch (error) {
-    console.error('❌ Error en obtenerRendicion:', error);
-    return res.status(500).json({ error: 'Error al obtener rendición', details: error.message });
+    logger.error('❌ Error en obtenerRendicion:', error);
+    return res.status(500).json(respuestaError500(error, 'Error al obtener rendición'));
   }
 };
 
@@ -274,12 +68,17 @@ exports.actualizarRendicion = async (req, res) => {
     const { id } = req.params;
     const datos = req.body;
 
-    await Rendicion.actualizar(id, datos);
+    const anterior = await Rendicion.obtenerConDetalles(id);
+    if (!anterior) {
+      return res.status(404).json({ error: 'Rendición no encontrada' });
+    }
+
+    await rendicionService.actualizarComprobante(id, datos, anterior.formato_emision_id);
     const actual = await Rendicion.obtenerConDetalles(id);
     return res.json({ success: true, rendicion: actual });
   } catch (error) {
-    console.error('❌ Error en actualizarRendicion:', error);
-    return res.status(500).json({ error: 'Error al actualizar rendición', details: error.message });
+    logger.error('❌ Error en actualizarRendicion:', error);
+    return res.status(500).json(respuestaError500(error, 'Error al actualizar rendición'));
   }
 };
 
@@ -304,8 +103,8 @@ exports.obtenerPorFormato = async (req, res) => {
       totalRutas: (rutas || []).length,  // 🆕 Cantidad de rutas
     });
   } catch (error) {
-    console.error('❌ Error en obtenerPorFormato:', error);
-    return res.status(500).json({ error: 'Error al obtener rendiciones', details: error.message });
+    logger.error('❌ Error en obtenerPorFormato:', error);
+    return res.status(500).json(respuestaError500(error, 'Error al obtener rendiciones'));
   }
 };
 
@@ -313,10 +112,52 @@ exports.obtenerPorFormato = async (req, res) => {
 exports.eliminarRendicion = async (req, res) => {
   try {
     const { id } = req.params;
-    await Rendicion.eliminar(id);
+    const rendicion = await Rendicion.obtenerConDetalles(id);
+    await rendicionService.eliminarComprobante(id, rendicion && rendicion.formato_emision_id);
     return res.json({ success: true, message: 'Rendición eliminada' });
   } catch (error) {
-    console.error('❌ Error en eliminarRendicion:', error);
-    return res.status(500).json({ error: 'Error al eliminar rendición', details: error.message });
+    logger.error('❌ Error en eliminarRendicion:', error);
+    return res.status(500).json(respuestaError500(error, 'Error al eliminar rendición'));
+  }
+};
+// PUT /api/rendiciones/:id/validacion
+// Marca un comprobante como VALIDADO tras una validación exitosa en SUNAT
+exports.marcarValidado = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existente = await Rendicion.obtenerConDetalles(id);
+    if (!existente) {
+      return res.status(404).json({ error: 'Rendición no encontrada' });
+    }
+    const mensaje = String((req.body && req.body.mensaje) || '').slice(0, 1000) || null;
+    const estado = req.body && req.body.estado === 'MANUAL' ? 'MANUAL' : 'VALIDADO';
+    await Rendicion.actualizar(id, { estado_rendicion: estado, validacion_mensaje: mensaje, validacion_fecha: new Date() });
+    return res.json({ success: true, estado_rendicion: estado });
+  } catch (error) {
+    return res.status(500).json(respuestaError500(error, 'Error al marcar la validación'));
+  }
+};
+
+// PUT /api/rendiciones/:id/monto-validacion
+// Registra el monto real de la factura y su sustento para repetir la validación en SUNAT
+exports.marcarMontoValidacion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const monto = parseFloat(req.body && req.body.monto_factura);
+    const sustento = String((req.body && req.body.sustento) || '').trim();
+    if (!(monto > 0)) {
+      return res.status(400).json({ error: 'El monto de la factura debe ser mayor a 0' });
+    }
+    if (sustento.length < 10) {
+      return res.status(400).json({ error: 'Escribe un sustento de al menos 10 caracteres' });
+    }
+    const existente = await Rendicion.obtenerConDetalles(id);
+    if (!existente) {
+      return res.status(404).json({ error: 'Rendición no encontrada' });
+    }
+    await Rendicion.actualizar(id, { monto_factura: monto, sustento_monto: sustento.slice(0, 1000) });
+    return res.json({ success: true, monto_factura: monto });
+  } catch (error) {
+    return res.status(500).json(respuestaError500(error, 'Error al guardar el monto de la factura'));
   }
 };

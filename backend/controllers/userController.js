@@ -1,11 +1,12 @@
 const User = require('../models/User');
+const { respuestaError500 } = require('../shared/errores');
 
 exports.listar = async (req, res) => {
   try {
     const usuarios = await User.listar();
     res.json(usuarios);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -14,7 +15,7 @@ exports.listarActivos = async (req, res) => {
     const usuarios = await User.obtenerActivos();
     res.json(usuarios);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -29,9 +30,11 @@ exports.obtener = async (req, res) => {
 
     res.json(usuario);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
+
+const generarPasswordTemporal = () => require('crypto').randomBytes(9).toString('base64url');
 
 exports.crear = async (req, res) => {
   try {
@@ -41,15 +44,17 @@ exports.crear = async (req, res) => {
       return res.status(400).json({ error: 'Nombre, usuario, email y rol son requeridos' });
     }
 
-    const id = await User.crear({ nombre, username, email, rol, ambito_id, dni, cargo_id });
+    const passwordTemporal = generarPasswordTemporal();
+    const id = await User.crear({ nombre, username, email, rol, ambito_id, dni, cargo_id, passwordTemporal });
     const usuarioCreado = await User.obtenerPorId(id);
-    
+
     res.status(201).json({
-      mensaje: 'Usuario creado exitosamente. Contraseña por defecto: Autoridad1',
-      usuario: usuarioCreado
+      mensaje: `Usuario creado exitosamente. Contraseña temporal: ${passwordTemporal} (deberá cambiarla al ingresar)`,
+      usuario: usuarioCreado,
+      password_temporal: passwordTemporal
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -85,7 +90,7 @@ exports.actualizar = async (req, res) => {
       usuario: usuarioActualizado
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -110,7 +115,7 @@ exports.activarDesactivar = async (req, res) => {
       activo: activo ? 1 : 0
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -127,7 +132,7 @@ exports.eliminar = async (req, res) => {
 
     res.json({ mensaje: 'Usuario eliminado exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -140,17 +145,19 @@ exports.resetearPassword = async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    const resultado = await User.resetearPassword(id);
-    
+    const passwordTemporal = generarPasswordTemporal();
+    const resultado = await User.resetearPassword(id, passwordTemporal);
+
     if (!resultado) {
       return res.status(500).json({ error: 'No se pudo resetear la contraseña' });
     }
 
-    res.json({ 
-      mensaje: 'Contraseña reseteada exitosamente a: Autoridad1',
-      usuarioId: id
+    res.json({
+      mensaje: `Contraseña reseteada. Contraseña temporal: ${passwordTemporal} (deberá cambiarla al ingresar)`,
+      usuarioId: id,
+      password_temporal: passwordTemporal
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };

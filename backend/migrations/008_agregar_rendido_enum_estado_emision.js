@@ -16,6 +16,8 @@ const agregarRendidoEnum = async (pool) => {
       MODIFY COLUMN estado_emision ENUM(
         'BORRADOR',
         'ENVIADO',
+        'RINDIENDO',
+        'DEVUELTO',
         'RENDIDO',
         'APROBADO',
         'ANULADO',

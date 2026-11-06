@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const { pool } = require('../config/database');
 
 class ComprobanteDetalle {
@@ -24,10 +25,10 @@ class ComprobanteDetalle {
         [valoresMultiples]
       );
 
-      console.log(`✅ ${detalles.length} detalles creados para comprobante ${comprobante_id}`);
+      logger.info(`✅ ${detalles.length} detalles creados para comprobante ${comprobante_id}`);
       return detalles;
     } catch (error) {
-      console.error('❌ Error en ComprobanteDetalle.crearDetalles:', error);
+      logger.error('❌ Error en ComprobanteDetalle.crearDetalles:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -49,7 +50,7 @@ class ComprobanteDetalle {
 
       return rows;
     } catch (error) {
-      console.error('❌ Error en ComprobanteDetalle.obtenerPorComprobante:', error);
+      logger.error('❌ Error en ComprobanteDetalle.obtenerPorComprobante:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -74,10 +75,10 @@ class ComprobanteDetalle {
         await this.crearDetalles(comprobante_id, detalles);
       }
 
-      console.log(`✅ Detalles actualizados para comprobante ${comprobante_id}`);
+      logger.info(`✅ Detalles actualizados para comprobante ${comprobante_id}`);
       return detalles;
     } catch (error) {
-      console.error('❌ Error en ComprobanteDetalle.actualizarDetalles:', error);
+      logger.error('❌ Error en ComprobanteDetalle.actualizarDetalles:', error);
       throw error;
     } finally {
       if (connection) connection.release();
@@ -97,10 +98,10 @@ class ComprobanteDetalle {
         [comprobante_id]
       );
 
-      console.log(`✅ Detalles eliminados para comprobante ${comprobante_id}`);
+      logger.info(`✅ Detalles eliminados para comprobante ${comprobante_id}`);
       return result;
     } catch (error) {
-      console.error('❌ Error en ComprobanteDetalle.eliminarPorComprobante:', error);
+      logger.error('❌ Error en ComprobanteDetalle.eliminarPorComprobante:', error);
       throw error;
     } finally {
       if (connection) connection.release();

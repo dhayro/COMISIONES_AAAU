@@ -1,11 +1,12 @@
 const CostoViaje = require('../models/CostoViaje');
+const { respuestaError500 } = require('../shared/errores');
 
 exports.listar = async (req, res) => {
   try {
     const costos = await CostoViaje.listar();
     res.json(costos);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -20,7 +21,7 @@ exports.obtener = async (req, res) => {
 
     res.json(costo);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -40,7 +41,7 @@ exports.crear = async (req, res) => {
       costo
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -66,7 +67,7 @@ exports.actualizar = async (req, res) => {
       costo
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -81,6 +82,6 @@ exports.eliminar = async (req, res) => {
 
     res.json({ mensaje: 'Costo de viaje eliminado exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };

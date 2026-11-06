@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../config/database');
@@ -41,7 +42,7 @@ const registrar = async (req, res) => {
       connection.release();
     }
   } catch (error) {
-    console.error('Error en registrar:', error);
+    logger.error('Error en registrar:', error);
     return res.status(500).json({ error: 'Error al registrar usuario' });
   }
 };
@@ -60,7 +61,7 @@ const login = async (req, res) => {
     try {
       // Buscar usuario por username (incluir ambito_id)
       const [users] = await connection.query(
-        'SELECT id, email, password, nombre, rol, ambito_id FROM users WHERE username = ?',
+        'SELECT id, email, password, nombre, rol, ambito_id, debe_cambiar_password FROM users WHERE username = ?',
         [username]
       );
 
@@ -87,6 +88,7 @@ const login = async (req, res) => {
       return res.status(200).json({
         mensaje: 'Login exitoso',
         token,
+        debe_cambiar_password: !!user.debe_cambiar_password,
         usuario: {
           id: user.id,
           email: user.email,
@@ -100,7 +102,7 @@ const login = async (req, res) => {
       connection.release();
     }
   } catch (error) {
-    console.error('Error en login:', error);
+    logger.error('Error en login:', error);
     return res.status(500).json({ error: 'Error al iniciar sesión' });
   }
 };
@@ -125,9 +127,43 @@ const obtenerPerfil = async (req, res) => {
       connection.release();
     }
   } catch (error) {
-    console.error('Error en obtenerPerfil:', error);
+    logger.error('Error en obtenerPerfil:', error);
     return res.status(500).json({ error: 'Error al obtener perfil' });
   }
 };
 
-module.exports = { registrar, login, obtenerPerfil };
+const cambiarPassword = async (req, res) => {
+  try {
+    const { password_actual, password_nueva } = req.body;
+
+    if (!password_actual || !password_nueva) {
+      return res.status(400).json({ error: 'La contraseña actual y la nueva son requeridas' });
+    }
+    if (password_nueva.length < 8) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
+    }
+    if (password_nueva === password_actual || password_nueva === 'Autoridad1') {
+      return res.status(400).json({ error: 'Elige una contraseña distinta a la actual o a la por defecto' });
+    }
+
+    const [usuarios] = await pool.query('SELECT password FROM users WHERE id = ?', [req.user.id]);
+    if (usuarios.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const actualValida = await bcrypt.compare(password_actual, usuarios[0].password);
+    if (!actualValida) {
+      return res.status(401).json({ error: 'La contraseña actual es incorrecta' });
+    }
+
+    const hash = await bcrypt.hash(password_nueva, 10);
+    await pool.query('UPDATE users SET password = ?, debe_cambiar_password = 0 WHERE id = ?', [hash, req.user.id]);
+
+    res.json({ mensaje: 'Contraseña actualizada correctamente' });
+  } catch (error) {
+    logger.error('❌ Error al cambiar contraseña:', error.message);
+    res.status(500).json({ error: 'No se pudo cambiar la contraseña' });
+  }
+};
+
+module.exports = { registrar, login, obtenerPerfil, cambiarPassword };

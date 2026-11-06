@@ -15,6 +15,8 @@ router.get('/obtener-por-formato/:formato_emision_id', rendicionesController.obt
 router.get('/:id', rendicionesController.obtenerRendicion);
 
 // Actualizar
+router.put('/:id/validacion', rendicionesController.marcarValidado);
+router.put('/:id/monto-validacion', rendicionesController.marcarMontoValidacion);
 router.put('/:id', rendicionesController.actualizarRendicion);
 
 // Eliminar

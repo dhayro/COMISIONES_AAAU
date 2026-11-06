@@ -1,8 +1,10 @@
+const logger = require('../shared/logger');
 /**
  * Controlador para gestionar rutas (viajes)
  */
 
 const Ruta = require('../models/Ruta');
+const FormatoEmision = require('../models/FormatoEmision');
 
 /**
  * POST /api/rutas - Crear una nueva ruta
@@ -29,7 +31,9 @@ const crearRuta = async (req, res) => {
       observaciones
     });
 
-    console.log('✅ Ruta creada:', ruta);
+    logger.info('✅ Ruta creada:', ruta);
+
+    await FormatoEmision.marcarRindiendo(formato_emision_id);
 
     res.status(201).json({
       success: true,
@@ -37,7 +41,7 @@ const crearRuta = async (req, res) => {
       ruta
     });
   } catch (error) {
-    console.error('❌ Error al crear ruta:', error);
+    logger.error('❌ Error al crear ruta:', error);
     res.status(500).json({
       error: 'Error al crear ruta',
       details: error.message
@@ -60,7 +64,7 @@ const obtenerRutasPorFormato = async (req, res) => {
       rutas
     });
   } catch (error) {
-    console.error('❌ Error al obtener rutas:', error);
+    logger.error('❌ Error al obtener rutas:', error);
     res.status(500).json({
       error: 'Error al obtener rutas',
       details: error.message
@@ -86,7 +90,7 @@ const obtenerRuta = async (req, res) => {
       ruta
     });
   } catch (error) {
-    console.error('❌ Error al obtener ruta:', error);
+    logger.error('❌ Error al obtener ruta:', error);
     res.status(500).json({
       error: 'Error al obtener ruta',
       details: error.message
@@ -102,6 +106,11 @@ const actualizarRuta = async (req, res) => {
     const { id } = req.params;
     const { origen, fecha_salida, destino, fecha_llegada, proposito, kilometraje, observaciones } = req.body;
 
+    const anterior = await Ruta.obtenerPorId(id);
+    if (anterior) {
+      await FormatoEmision.marcarRindiendo(anterior.formato_emision_id);
+    }
+
     const ruta = await Ruta.actualizar(id, {
       origen,
       fecha_salida,
@@ -112,7 +121,7 @@ const actualizarRuta = async (req, res) => {
       observaciones
     });
 
-    console.log('✅ Ruta actualizada:', ruta);
+    logger.info('✅ Ruta actualizada:', ruta);
 
     res.json({
       success: true,
@@ -120,7 +129,7 @@ const actualizarRuta = async (req, res) => {
       ruta
     });
   } catch (error) {
-    console.error('❌ Error al actualizar ruta:', error);
+    logger.error('❌ Error al actualizar ruta:', error);
     res.status(500).json({
       error: 'Error al actualizar ruta',
       details: error.message
@@ -135,20 +144,24 @@ const eliminarRuta = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const anterior = await Ruta.obtenerPorId(id);
     const eliminado = await Ruta.eliminar(id);
+    if (eliminado && anterior) {
+      await FormatoEmision.marcarRindiendo(anterior.formato_emision_id);
+    }
 
     if (!eliminado) {
       return res.status(404).json({ error: 'Ruta no encontrada' });
     }
 
-    console.log('✅ Ruta eliminada:', id);
+    logger.info('✅ Ruta eliminada:', id);
 
     res.json({
       success: true,
       message: 'Ruta eliminada exitosamente'
     });
   } catch (error) {
-    console.error('❌ Error al eliminar ruta:', error);
+    logger.error('❌ Error al eliminar ruta:', error);
     res.status(500).json({
       error: 'Error al eliminar ruta',
       details: error.message
@@ -165,7 +178,7 @@ const eliminarRutasPorFormato = async (req, res) => {
 
     const cantidad = await Ruta.eliminarPorFormato(formato_emision_id);
 
-    console.log(`✅ ${cantidad} ruta(s) eliminada(s) del formato ${formato_emision_id}`);
+    logger.info(`✅ ${cantidad} ruta(s) eliminada(s) del formato ${formato_emision_id}`);
 
     res.json({
       success: true,
@@ -173,7 +186,7 @@ const eliminarRutasPorFormato = async (req, res) => {
       cantidad
     });
   } catch (error) {
-    console.error('❌ Error al eliminar rutas:', error);
+    logger.error('❌ Error al eliminar rutas:', error);
     res.status(500).json({
       error: 'Error al eliminar rutas',
       details: error.message

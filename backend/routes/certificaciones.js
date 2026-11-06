@@ -1,5 +1,5 @@
 const express = require('express');
-const { obtenerCertificadosPorMeta, obtenerCertificadoPorId, obtenerClasificadoresDeCertificacion } = require('../controllers/certificacionesController');
+const { obtenerCertificadosPorMeta, obtenerClasificadoresDeCertificacion } = require('../controllers/certificacionesController');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
@@ -74,6 +74,5 @@ router.get('/:certificacionId/clasificadores', obtenerClasificadoresDeCertificac
  *       500:
  *         description: Error del servidor
  */
-router.get('/:id', obtenerCertificadoPorId);
 
 module.exports = router;

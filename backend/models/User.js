@@ -84,12 +84,11 @@ class User {
   static async crear(datos) {
     try {
       const bcrypt = require('bcryptjs');
-      const { nombre, username, email, rol, ambito_id, dni, cargo_id } = datos;
-      const passwordPorDefecto = 'Autoridad1';
-      const hashedPassword = await bcrypt.hash(passwordPorDefecto, 10);
-      
+      const { nombre, username, email, rol, ambito_id, dni, cargo_id, passwordTemporal } = datos;
+      const hashedPassword = await bcrypt.hash(passwordTemporal, 10);
+
       const [result] = await pool.query(
-        'INSERT INTO users (nombre, username, email, password, dni, rol, ambito_id, cargo_id, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)',
+        'INSERT INTO users (nombre, username, email, password, dni, rol, ambito_id, cargo_id, activo, debe_cambiar_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)',
         [nombre, username, email, hashedPassword, dni || null, rol || 'usuario', ambito_id || null, cargo_id || null]
       );
       return result.insertId;
@@ -166,14 +165,13 @@ class User {
     }
   }
 
-  static async resetearPassword(id) {
+  static async resetearPassword(id, passwordTemporal) {
     try {
       const bcrypt = require('bcryptjs');
-      const passwordPorDefecto = 'Autoridad1';
-      const hashedPassword = await bcrypt.hash(passwordPorDefecto, 10);
-      
+      const hashedPassword = await bcrypt.hash(passwordTemporal, 10);
+
       const [result] = await pool.query(
-        'UPDATE users SET password = ? WHERE id = ?',
+        'UPDATE users SET password = ?, debe_cambiar_password = 1 WHERE id = ?',
         [hashedPassword, id]
       );
       return result.affectedRows > 0;

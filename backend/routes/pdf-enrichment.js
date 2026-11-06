@@ -1,3 +1,4 @@
+const logger = require('../shared/logger');
 const express = require('express');
 const router = express.Router();
 const mysql = require('mysql2/promise');
@@ -88,7 +89,7 @@ router.post('/enrich-extracted-data', authMiddleware, async (req, res) => {
       throw error;
     }
   } catch (error) {
-    console.error('❌ Error enriqueciendo datos:', error.message);
+    logger.error('❌ Error enriqueciendo datos:', error.message);
     res.status(500).json({
       success: false,
       error: error.message
@@ -180,7 +181,7 @@ router.post('/save-certification', authMiddleware, async (req, res) => {
       throw error;
     }
   } catch (error) {
-    console.error('❌ Error guardando certificación:', error.message);
+    logger.error('❌ Error guardando certificación:', error.message);
     res.status(500).json({
       success: false,
       error: error.message

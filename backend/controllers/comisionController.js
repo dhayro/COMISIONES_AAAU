@@ -1,4 +1,6 @@
+const logger = require('../shared/logger');
 const Comision = require('../models/Comision');
+const { respuestaError500 } = require('../shared/errores');
 const Ambito = require('../models/Ambito');
 const Clasificador = require('../models/Clasificador');
 const User = require('../models/User');
@@ -75,7 +77,7 @@ exports.crearComision = async (req, res) => {
       ...comisionCompleta
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -184,7 +186,7 @@ exports.obtenerComision = async (req, res) => {
       monto_total,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -212,7 +214,7 @@ exports.listarComisiones = async (req, res) => {
     const comisiones = await Comision.listar(usuarioId, rolUsuario, userAmbitoId);
     res.json(comisiones);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -234,7 +236,7 @@ exports.actualizarComision = async (req, res) => {
     if (comisionActual.aprobacion_estado === 'RECHAZADA') {
       data.aprobacion_estado = 'PENDIENTE_APROBACION';
       data.observacion_aprobacion = ''; // Limpiar el mensaje de rechazo
-      console.log('🔄 Comisión RECHAZADA detectada. Reactivando a PENDIENTE_APROBACION...');
+      logger.info('🔄 Comisión RECHAZADA detectada. Reactivando a PENDIENTE_APROBACION...');
     }
 
     // Validar que no se intente asignar presupuesto sin aprobación previa
@@ -273,7 +275,7 @@ exports.actualizarComision = async (req, res) => {
       ...comisionActualizada
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -289,7 +291,7 @@ exports.eliminarComision = async (req, res) => {
 
     res.json({ mensaje: 'Comisión eliminada exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -343,10 +345,10 @@ exports.agregarComisionado = async (req, res) => {
       observacion
     });
 
-    console.log(`\n➕ COMISIONADO AGREGADO:`);
-    console.log(`   ID Comisión: ${comision_id}`);
-    console.log(`   ID Comisionado: ${comisionadoId}`);
-    console.log(`   Monto guardado: ${monto}`);
+    logger.info(`\n➕ COMISIONADO AGREGADO:`);
+    logger.info(`   ID Comisión: ${comision_id}`);
+    logger.info(`   ID Comisionado: ${comisionadoId}`);
+    logger.info(`   Monto guardado: ${monto}`);
 
     // Recalcular total
     await Comision.recalcularTotal(comision_id);
@@ -356,7 +358,7 @@ exports.agregarComisionado = async (req, res) => {
       id: comisionadoId
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -367,7 +369,7 @@ exports.obtenerComisionados = async (req, res) => {
     const comisionados = await Comision.obtenerComisionados(comision_id);
     res.json(comisionados);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -378,8 +380,8 @@ exports.actualizarComisionado = async (req, res) => {
     const id = req.params.comisionado_id || req.params.id;
     const data = req.body;
 
-    console.log(`\n� ACTUALIZANDO COMISIONADO ID ${id}:`);
-    console.log(`   Datos recibidos:`, data);
+    logger.info(`\n� ACTUALIZANDO COMISIONADO ID ${id}:`);
+    logger.info(`   Datos recibidos:`, data);
 
     await Comision.actualizarComisionado(id, data);
 
@@ -391,16 +393,16 @@ exports.actualizarComisionado = async (req, res) => {
 
     if (comisionado.length > 0) {
       const comisionId = comisionado[0].comision_id;
-      console.log(`   Comisión asociada: ${comisionId}`);
+      logger.info(`   Comisión asociada: ${comisionId}`);
       await Comision.recalcularTotal(comisionId);
     }
 
-    console.log(`✅ ACTUALIZACIÓN COMPLETADA\n`);
+    logger.info(`✅ ACTUALIZACIÓN COMPLETADA\n`);
 
     res.json({ mensaje: 'Comisionado actualizado exitosamente' });
   } catch (error) {
-    console.error('❌ ERROR EN ACTUALIZACIÓN:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ ERROR EN ACTUALIZACIÓN:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -415,9 +417,9 @@ exports.eliminarComisionado = async (req, res) => {
       [id]
     );
 
-    console.log(`\n🗑️  ELIMINANDO COMISIONADO ID ${id}:`);
+    logger.info(`\n🗑️  ELIMINANDO COMISIONADO ID ${id}:`);
     if (comisionado.length > 0) {
-      console.log(`   Monto a restar: ${comisionado[0].monto}`);
+      logger.info(`   Monto a restar: ${comisionado[0].monto}`);
     }
 
     const eliminado = await Comision.eliminarComisionado(id);
@@ -429,15 +431,15 @@ exports.eliminarComisionado = async (req, res) => {
     // Recalcular total
     if (comisionado.length > 0) {
       const comisionId = comisionado[0].comision_id;
-      console.log(`   Comisión asociada: ${comisionId}`);
+      logger.info(`   Comisión asociada: ${comisionId}`);
       await Comision.recalcularTotal(comisionId);
     }
 
-    console.log(`✅ COMISIONADO ELIMINADO\n`);
+    logger.info(`✅ COMISIONADO ELIMINADO\n`);
 
     res.json({ mensaje: 'Comisionado eliminado exitosamente' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -596,7 +598,7 @@ exports.obtenerReportePresupuestos = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error en obtenerReportePresupuestos:', error);
+    logger.error('Error en obtenerReportePresupuestos:', error);
     res.status(500).json({
       error: error.message,
       detalles: 'Error al generar reporte de presupuestos'
@@ -752,7 +754,7 @@ exports.obtenerReportePresupuestosPendientes = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error en obtenerReportePresupuestosPendientes:', error);
+    logger.error('Error en obtenerReportePresupuestosPendientes:', error);
     res.status(500).json({
       error: error.message,
       detalles: 'Error al generar reporte de presupuestos pendientes'
@@ -766,7 +768,7 @@ exports.sincronizarCostosTotales = async (req, res) => {
   try {
     const { pool } = require('../config/database');
 
-    console.log('\n🔄 SINCRONIZACIÓN DE COSTOS TOTALES - INICIADA');
+    logger.info('\n🔄 SINCRONIZACIÓN DE COSTOS TOTALES - INICIADA');
 
     // Obtener todas las comisiones
     const [comisiones] = await pool.query(
@@ -801,7 +803,7 @@ exports.sincronizarCostosTotales = async (req, res) => {
 
       // Comparar y actualizar si hay diferencia
       if (Math.abs(costoActual - totalCalculado) > 0.01) {
-        console.log(`⚠️  Comisión ID ${comisionId}: ${costoActual} → ${totalCalculado.toFixed(2)}`);
+        logger.info(`⚠️  Comisión ID ${comisionId}: ${costoActual} → ${totalCalculado.toFixed(2)}`);
 
         await pool.query(
           `UPDATE comisiones SET costo_total_comision = ? WHERE id = ?`,
@@ -818,7 +820,7 @@ exports.sincronizarCostosTotales = async (req, res) => {
       }
     }
 
-    console.log(`✅ SINCRONIZACIÓN COMPLETADA: ${actualizadas} comisiones actualizadas\n`);
+    logger.info(`✅ SINCRONIZACIÓN COMPLETADA: ${actualizadas} comisiones actualizadas\n`);
 
     res.json({
       mensaje: 'Sincronización de costos completada',
@@ -827,7 +829,7 @@ exports.sincronizarCostosTotales = async (req, res) => {
       discrepancias: discrepancias
     });
   } catch (error) {
-    console.error('❌ ERROR EN SINCRONIZACIÓN:', error.message);
+    logger.error('❌ ERROR EN SINCRONIZACIÓN:', error.message);
     res.status(500).json({
       error: error.message,
       detalles: 'Error al sincronizar costos totales'
@@ -859,7 +861,7 @@ exports.obtenerComisionesPorMes = async (req, res) => {
     const comisiones = await Comision.obtenerPorMes(yearNum, monthNum);
     res.json(comisiones);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -1032,7 +1034,7 @@ exports.obtenerReportePresupuestosAsignados = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error en obtenerReportePresupuestosAsignados:', error);
+    logger.error('Error en obtenerReportePresupuestosAsignados:', error);
     res.status(500).json({
       error: error.message,
       detalles: 'Error al generar reporte de presupuestos asignados'
@@ -1052,11 +1054,11 @@ exports.obtenerComisionesParaEmisionFormatos = async (req, res) => {
     const userAmbitoId = req.user.ambito_id;
     const pool = require('../config/database').pool;
 
-    console.log('🔍 obtenerComisionesParaEmisionFormatos');
-    console.log('   req.user:', req.user);
-    console.log('   usuarioId (extraído):', usuarioId);
-    console.log('   rol:', rol);
-    console.log('   userAmbitoId:', userAmbitoId);
+    logger.info('🔍 obtenerComisionesParaEmisionFormatos');
+    logger.info('   req.user:', req.user);
+    logger.info('   usuarioId (extraído):', usuarioId);
+    logger.info('   rol:', rol);
+    logger.info('   userAmbitoId:', userAmbitoId);
 
     let query = `SELECT DISTINCT c.id,
       c.ambito_id,
@@ -1095,7 +1097,7 @@ exports.obtenerComisionesParaEmisionFormatos = async (req, res) => {
                  INNER JOIN users comisionados ON cc.usuario_id = comisionados.id`;
       condiciones.push('comisionados.id = ?');
       params.push(usuarioId);
-      console.log('   📍 Filtro USUARIO aplicado: usuario_id =', usuarioId);
+      logger.info('   📍 Filtro USUARIO aplicado: usuario_id =', usuarioId);
     } else if (rol === 'administrativo' && userAmbitoId) {
       // ADMINISTRATIVO: Ver solo comisiones donde hay comisionados del mismo ámbito
       query += ` INNER JOIN comision_comisionados cc ON c.id = cc.comision_id
@@ -1111,23 +1113,23 @@ exports.obtenerComisionesParaEmisionFormatos = async (req, res) => {
     }
     query += ` ORDER BY c.fecha_salida DESC, c.id DESC`;
 
-    console.log('   📝 Query:', query);
-    console.log('   📍 Params:', params);
+    logger.info('   📝 Query:', query);
+    logger.info('   📍 Params:', params);
 
     const [comisiones] = await pool.query(query, params);
 
-    console.log('   ✓ Comisiones encontradas:', comisiones.length);
+    logger.info('   ✓ Comisiones encontradas:', comisiones.length);
     if (comisiones.length > 0) {
-      console.log('   📌 Primera comisión:', comisiones[0]);
+      logger.info('   📌 Primera comisión:', comisiones[0]);
     } else {
-      console.log('   ⚠️  RESULTADO VACÍO - Verificando datos en DB...');
+      logger.info('   ⚠️  RESULTADO VACÍO - Verificando datos en DB...');
       
       // Debug: Verificar si hay comisiones aprobadas con presupuesto asignado
       const [allAprobadas] = await pool.query(
         `SELECT id, lugar, aprobacion_estado, presupuesto_estado FROM comisiones 
          WHERE aprobacion_estado = "APROBADA" AND presupuesto_estado = "PRESUPUESTO ASIGNADO" LIMIT 5`
       );
-      console.log('   💾 Total de comisiones aprobadas + presupuesto:', allAprobadas.length);
+      logger.info('   💾 Total de comisiones aprobadas + presupuesto:', allAprobadas.length);
       
       // Debug: Verificar comisionados del usuario
       const [comisionadosDelUsuario] = await pool.query(
@@ -1138,14 +1140,14 @@ exports.obtenerComisionesParaEmisionFormatos = async (req, res) => {
          WHERE cc.usuario_id = ? LIMIT 10`,
         [usuarioId]
       );
-      console.log('   💾 Comisionados asignados al usuario:', comisionadosDelUsuario.length);
+      logger.info('   💾 Comisionados asignados al usuario:', comisionadosDelUsuario.length);
       comisionadosDelUsuario.forEach(row => {
-        console.log(`      - Comisión ${row.comision_id}: ${row.aprobacion_estado} / ${row.presupuesto_estado}`);
+        logger.info(`      - Comisión ${row.comision_id}: ${row.aprobacion_estado} / ${row.presupuesto_estado}`);
       });
     }
     
     if (comisiones.length === 0) {
-      console.log('   ⚠️  No hay comisiones para mostrar');
+      logger.info('   ⚠️  No hay comisiones para mostrar');
       return res.json({
         success: true,
         total: 0,
@@ -1188,7 +1190,7 @@ exports.obtenerComisionesParaEmisionFormatos = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error en obtenerComisionesParaEmisionFormatos:', error);
+    logger.error('Error en obtenerComisionesParaEmisionFormatos:', error);
     res.status(500).json({
       error: error.message,
       detalles: 'Error al obtener comisiones para emitir formatos'

@@ -1,4 +1,6 @@
+const logger = require('../shared/logger');
 // ========== Controlador para Correlativo Control ==========
+const { respuestaError500 } = require('../shared/errores');
 // Gestiona la tabla de control de correlativos por usuario/año
 
 const { pool } = require('../config/database');
@@ -25,8 +27,8 @@ exports.obtenerControlCorrelativo = async (req, res) => {
       data: resultados[0] 
     });
   } catch (error) {
-    console.error('❌ Error obteniendo control correlativo:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error obteniendo control correlativo:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -60,8 +62,8 @@ exports.crearControlCorrelativo = async (req, res) => {
       id: result.insertId 
     });
   } catch (error) {
-    console.error('❌ Error creando control correlativo:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error creando control correlativo:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -113,8 +115,8 @@ exports.actualizarControlCorrelativo = async (req, res) => {
       message: 'Control de correlativo actualizado exitosamente' 
     });
   } catch (error) {
-    console.error('❌ Error actualizando control correlativo:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error actualizando control correlativo:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -151,8 +153,8 @@ exports.incrementarCorrelativo = async (req, res) => {
       numero_proximo: proximoNumero
     });
   } catch (error) {
-    console.error('❌ Error incrementando correlativo:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error incrementando correlativo:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -181,8 +183,8 @@ exports.listarControlesCorrelativo = async (req, res) => {
       total: resultados.length 
     });
   } catch (error) {
-    console.error('❌ Error listando controles correlativo:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error listando controles correlativo:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -203,8 +205,8 @@ exports.eliminarControlCorrelativo = async (req, res) => {
       message: 'Control de correlativo eliminado exitosamente' 
     });
   } catch (error) {
-    console.error('❌ Error eliminando control correlativo:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error eliminando control correlativo:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -215,7 +217,7 @@ exports.generarCorrelativosAuto = async (req, res) => {
     connection = await pool.getConnection();
     
     const anoActual = new Date().getFullYear();
-    console.log(`\n📋 Iniciando generación de correlativo para año ${anoActual}...`);
+    logger.info(`\n📋 Iniciando generación de correlativo para año ${anoActual}...`);
     
     // Obtener todos los usuarios activos con iniciales
     const [usuarios] = await connection.query(
@@ -271,7 +273,7 @@ exports.generarCorrelativosAuto = async (req, res) => {
           });
         }
       } catch (error) {
-        console.error(`❌ Error procesando usuario ${usuario.nombre}:`, error.message);
+        logger.error(`❌ Error procesando usuario ${usuario.nombre}:`, error.message);
         correlativosGenerados.push({
           usuario: usuario.nombre,
           iniciales: usuario.iniciales,
@@ -283,7 +285,7 @@ exports.generarCorrelativosAuto = async (req, res) => {
     
     if (connection) connection.release();
     
-    console.log(`✅ Generación completada: ${generados} creados, ${actualizados} existentes`);
+    logger.info(`✅ Generación completada: ${generados} creados, ${actualizados} existentes`);
     
     res.json({
       message: `Correlativo generados exitosamente`,
@@ -294,9 +296,9 @@ exports.generarCorrelativosAuto = async (req, res) => {
       detalles: correlativosGenerados
     });
   } catch (error) {
-    console.error('❌ Error generando correlativo:', error.message);
+    logger.error('❌ Error generando correlativo:', error.message);
     if (connection) connection.release();
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -330,8 +332,8 @@ exports.obtenerProximoNumero = async (req, res) => {
       ano: anoActual
     });
   } catch (error) {
-    console.error('❌ Error obteniendo próximo número:', error.message);
-    res.status(500).json({ error: error.message });
+    logger.error('❌ Error obteniendo próximo número:', error.message);
+    res.status(500).json(respuestaError500(error));
   }
 };
 
@@ -342,7 +344,7 @@ exports.resetearCorrelativoAno = async (req, res) => {
     connection = await pool.getConnection();
     const anoActual = new Date().getFullYear();
     
-    console.log(`\n🔄 Reseteando correlativo para año ${anoActual}...`);
+    logger.info(`\n🔄 Reseteando correlativo para año ${anoActual}...`);
     
     // Limpiar todos los correlativo del año actual
     const [result] = await connection.query(
@@ -350,7 +352,7 @@ exports.resetearCorrelativoAno = async (req, res) => {
       [anoActual]
     );
     
-    console.log(`✅ ${result.affectedRows} correlativo reseteados`);
+    logger.info(`✅ ${result.affectedRows} correlativo reseteados`);
     
     if (connection) connection.release();
     
@@ -360,8 +362,8 @@ exports.resetearCorrelativoAno = async (req, res) => {
       reseteados: result.affectedRows
     });
   } catch (error) {
-    console.error('❌ Error reseteando correlativo:', error.message);
+    logger.error('❌ Error reseteando correlativo:', error.message);
     if (connection) connection.release();
-    res.status(500).json({ error: error.message });
+    res.status(500).json(respuestaError500(error));
   }
 };
