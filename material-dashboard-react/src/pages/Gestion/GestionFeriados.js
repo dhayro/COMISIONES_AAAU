@@ -119,7 +119,9 @@ function GestionFeriados() {
     acciones: (
       <MDBox display="flex" gap={1}>
         <Tooltip title="Eliminar">
-          <IconButton size="small" color="error" onClick={() => handleEliminar(feriado.fecha)}>
+          <IconButton size="small" color="error" onClick={() => handleEliminar(feriado.fecha)}
+      sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: '#ffcdd2' } }}
+    >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -130,7 +132,7 @@ function GestionFeriados() {
   const columns = [
     { Header: 'Fecha', accessor: 'fecha', width: '25%' },
     { Header: 'Descripción', accessor: 'descripcion', width: '55%' },
-    { Header: 'Acciones', accessor: 'acciones', align: 'center', width: '20%' },
+    { Header: 'Acciones', accessor: 'acciones', disableSortBy: true, align: 'center', width: '20%' },
   ];
 
   return (
@@ -151,9 +153,14 @@ function GestionFeriados() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Feriados
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Feriados
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre los feriados que se usan para calcular los plazos de rendición.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="info"
@@ -171,10 +178,12 @@ function GestionFeriados() {
             ) : (
               <DataTable
                 table={{ columns, rows }}
-                isSorted={false}
-                entriesPerPage={false}
-                showTotalEntries={false}
+                isSorted={true}
+                canSearch
+                entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
+                showTotalEntries
                 noEndBorder
+                vistaMovil
               />
             )}
           </MDBox>

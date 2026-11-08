@@ -696,13 +696,35 @@ function ReportePresupuestoPendiente() {
         return row.index + 1;
       },
     },
-    { Header: 'Ámbito', accessor: 'ambito_nombre', width: '12%' },
-    { Header: 'Lugar', accessor: 'lugar', width: '12%' },
+    { Header: 'Ámbito', accessor: 'ambito_nombre', width: '14%' },
+    {
+      Header: 'Lugar',
+      accessor: 'lugar',
+      width: '16%',
+      // eslint-disable-next-line react/prop-types,react/display-name
+      Cell: ({ row: { original } }) => {
+        // eslint-disable-next-line react/prop-types
+        const texto = original.lugar || '';
+        const partes = String(texto).split(/,s*|s+Ys+/).map((p) => p.trim()).filter(Boolean);
+        const extra = Math.max(partes.length - 2, 0);
+        return (
+          <MDTypography
+            variant="button"
+            display="block"
+            title={texto}
+            sx={{ lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          >
+            {partes.slice(0, 2).join(', ')}
+            {extra > 0 ? ` (+${extra} más)` : ''}
+          </MDTypography>
+        );
+      },
+    },
     { Header: 'Modalidad', accessor: 'modalidad_viaje', width: '11%' },
     {
       Header: 'Fecha Salida',
       accessor: 'fecha_salida',
-      width: '11%',
+      width: '12%',
       Cell: ({ row }) => {
         const fecha = row.original.fecha_salida;
         return fecha ? new Date(fecha).toLocaleDateString('es-ES') : '-';
@@ -711,15 +733,29 @@ function ReportePresupuestoPendiente() {
     {
       Header: 'Fecha Retorno',
       accessor: 'fecha_retorno',
-      width: '11%',
+      width: '12%',
       Cell: ({ row }) => {
         const fecha = row.original.fecha_retorno;
         return fecha ? new Date(fecha).toLocaleDateString('es-ES') : '-';
       },
     },
     { Header: 'Días', accessor: 'num_dias', width: '7%' },
-    { Header: 'Costo/Día', accessor: 'costo_xdia', width: '11%' },
-    { Header: 'Total', accessor: 'monto_total', width: '11%' },
+    {
+      Header: 'Costo/Día',
+      accessor: 'costo_xdia',
+      width: '12%',
+      Cell: ({ value }) => Number(value || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    },
+    {
+      Header: 'Total',
+      accessor: 'monto_total',
+      width: '11%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row }) => {
+        const v = Number(row.original.monto_total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return <MDTypography variant="button" fontWeight="bold" color="dark">{v}</MDTypography>;
+      },
+    },
   ];
 
   return (
@@ -728,10 +764,15 @@ function ReportePresupuestoPendiente() {
       <MDBox pt={6} pb={3}>
         <MDBox mb={3}>
           <Card>
-            <MDBox p={3}>
-              <MDTypography variant="h5" gutterBottom>
-                Reporte de Comisiones - Presupuestos Pendientes
-              </MDTypography>
+            <MDBox mx={2} mt={-3} py={3} px={2} variant="gradient" bgColor="info" borderRadius="lg" coloredShadow="info">
+                <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                  Reporte de Comisiones - Presupuestos Pendientes
+                </MDTypography>
+                <MDTypography variant="button" color="white" opacity={0.8}>
+                  Consulte las comisiones con presupuesto pendiente por mes o rango de fechas.
+                </MDTypography>
+              </MDBox>
+              <MDBox p={3}>
 
               {error && <Alert severity="error">{error}</Alert>}
 
@@ -820,13 +861,10 @@ function ReportePresupuestoPendiente() {
                 </MDButton>
               </MDBox>
             </MDBox>
-          </Card>
-        </MDBox>
 
         {/* Tabla de datos */}
         {datos.length > 0 && (
           <MDBox>
-            <Card>
               <MDBox p={3}>
                 <DataTable
                   table={{
@@ -838,6 +876,7 @@ function ReportePresupuestoPendiente() {
                   entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                   showTotalEntries
                   noEndBorder
+                  vistaMovil
                 />
 
                 {/* Resumen */}
@@ -877,9 +916,10 @@ function ReportePresupuestoPendiente() {
                   </MDBox>
                 </MDBox>
               </MDBox>
-            </Card>
           </MDBox>
         )}
+          </Card>
+        </MDBox>
       </MDBox>
       <Footer />
     </DashboardLayout>

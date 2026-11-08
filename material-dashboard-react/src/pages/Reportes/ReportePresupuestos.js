@@ -745,6 +745,7 @@ function ReportePresupuestos() {
     {
       Header: 'Item',
       accessor: 'item',
+      disableSortBy: true,
       width: '5%',
       // eslint-disable-next-line react/prop-types,react/display-name
       Cell: ({ row }) => {
@@ -752,9 +753,31 @@ function ReportePresupuestos() {
         return row.index + 1;
       },
     },
-    { Header: 'Ámbito', accessor: 'ambito_nombre', width: '12%' },
-    { Header: 'Lugar', accessor: 'lugar', width: '12%' },
-    { Header: 'Modalidad', accessor: 'modalidad_viaje', width: '11%' },
+    { Header: 'Ámbito', accessor: 'ambito_nombre', width: '14%' },
+    {
+      Header: 'Lugar',
+      accessor: 'lugar',
+      width: '16%',
+      // eslint-disable-next-line react/prop-types,react/display-name
+      Cell: ({ row: { original } }) => {
+        // eslint-disable-next-line react/prop-types
+        const texto = original.lugar || '';
+        const partes = String(texto).split(/,s*|s+Ys+/).map((p) => p.trim()).filter(Boolean);
+        const extra = Math.max(partes.length - 2, 0);
+        return (
+          <MDTypography
+            variant="button"
+            display="block"
+            title={texto}
+            sx={{ lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          >
+            {partes.slice(0, 2).join(', ')}
+            {extra > 0 ? ` (+${extra} más)` : ''}
+          </MDTypography>
+        );
+      },
+    },
+    { Header: 'Modalidad', accessor: 'modalidad_viaje', width: '12%' },
     {
       Header: 'Período',
       accessor: 'fecha_salida',
@@ -765,24 +788,29 @@ function ReportePresupuestos() {
         const fechaSalida = row.original.fecha_salida;
         // eslint-disable-next-line react/prop-types
         const fechaRetorno = row.original.fecha_retorno;
-        if (fechaSalida && fechaRetorno) {
-          return `${new Date(fechaSalida).toLocaleDateString('es-ES')} - ${new Date(
-            fechaRetorno
-          ).toLocaleDateString('es-ES')}`;
-        }
-        return '-';
+        const dmy = (v) => {
+          const [a, m, d] = String(v).slice(0, 10).split('-');
+          return a && m && d ? `${d}/${m}/${a}` : '-';
+        };
+        if (!fechaSalida || !fechaRetorno) return '-';
+        return (
+          <MDBox lineHeight={1.3}>
+            <MDTypography variant="button" display="block" sx={{ whiteSpace: 'nowrap' }}>{dmy(fechaSalida)}</MDTypography>
+            <MDTypography variant="caption" color="text" display="block" sx={{ whiteSpace: 'nowrap' }}>al {dmy(fechaRetorno)}</MDTypography>
+          </MDBox>
+        );
       },
     },
-    { Header: 'Documento', accessor: 'presupuesto_documento', width: '13%' },
+    { Header: 'Documento', accessor: 'presupuesto_documento', width: '15%' },
     { Header: 'CUT', accessor: 'presupuesto_numero_cut', width: '11%' },
     {
-      Header: 'Monto (S/.)',
+      Header: 'Monto',
       accessor: 'monto_total',
       width: '12%',
       // eslint-disable-next-line react/prop-types
       Cell: ({ row }) => {
-        // eslint-disable-next-line react/prop-types
-        return parseFloat(row.original.monto_total || 0).toFixed(2);
+        const v = Number(row.original.monto_total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return <MDTypography variant="button" fontWeight="bold" color="dark">{v}</MDTypography>;
       },
     },
   ];
@@ -802,9 +830,14 @@ function ReportePresupuestos() {
             borderRadius="lg"
             coloredShadow="info"
           >
-            <MDTypography variant="h6" color="white" fontWeight="medium">
-              Reporte de Presupuestos Asignados
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" fontWeight="medium" sx={{ textTransform: 'uppercase' }}>
+                Reporte de Presupuestos Asignados
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Consulte el presupuesto asignado por meta y fuente de financiamiento.
+              </MDTypography>
+            </MDBox>
           </MDBox>
 
           <MDBox p={3}>
@@ -924,10 +957,11 @@ function ReportePresupuestos() {
                       rows: datos,
                     }}
                     canSearch
-                    isSorted={false}
+                    isSorted={true}
                     entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                     showTotalEntries
                     noEndBorder
+                    vistaMovil
                   />
                 </MDBox>
 

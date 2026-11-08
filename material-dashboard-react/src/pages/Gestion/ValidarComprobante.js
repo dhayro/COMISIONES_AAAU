@@ -1,4 +1,12 @@
+import MDBadge from 'components/MDBadge';
+import MDButton from 'components/MDButton';
+import Drawer from '@mui/material/Drawer';
+import CloseIcon from '@mui/icons-material/Close';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import React, { useState, useEffect, useRef } from 'react';
+import PrintIcon from '@mui/icons-material/Print';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   Card,
   Button,
@@ -12,6 +20,8 @@ import {
   Box,
   Icon,
   Chip,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import MDBox from 'components/MDBox';
 import MDTypography from 'components/MDTypography';
@@ -22,9 +32,51 @@ import DataTable from 'examples/Tables/DataTable';
 import api from 'services/api';
 import { useAuth } from 'context/AuthContext';
 
+// Monto con formato peruano (sin prefijo de moneda)
+const montoPeruValidacion = (valor) =>
+  Number(valor || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Fecha dd/mm/aaaa tomada del texto de la fecha (evita el desfase de zona horaria)
+const fechaDMYValidacion = (valor) => {
+  if (!valor) return '-';
+  const [anio, mes, dia] = String(valor).slice(0, 10).split('-');
+  return anio && mes && dia ? `${dia}/${mes}/${anio}` : '-';
+};
+
+// Destinos de la comisión: los dos primeros y el resto como "+N"
+const resumirDestinosValidacion = (texto = '') => {
+  const partes = String(texto)
+    .split(/,\s*|\s+Y\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return { visibles: partes.slice(0, 2), extra: Math.max(partes.length - 2, 0), partes };
+};
+
+// Sección y dato del Drawer de datos generales
+const SeccionVerValidacion = ({ numero, titulo, children }) => (
+  <MDBox mb={2.5}>
+    <MDTypography variant="caption" fontWeight="bold" color="info" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      {numero} · {titulo}
+    </MDTypography>
+    <MDBox mt={0.5} p={2} sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fafbfc' }}>
+      {children}
+    </MDBox>
+  </MDBox>
+);
+
+const DatoVerValidacion = ({ etiqueta, children }) => (
+  <MDBox mb={1}>
+    <MDTypography variant="caption" fontWeight="bold" color="secondary" display="block">
+      {etiqueta}
+    </MDTypography>
+    <MDBox sx={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>{children}</MDBox>
+  </MDBox>
+);
+
 function ValidarComprobante() {
   const { usuario: usuarioLogueado } = useAuth();
   const [formatos, setFormatos] = useState([]);
+  const [formatoVer, setFormatoVer] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [openValidar, setOpenValidar] = useState(false);
@@ -612,82 +664,150 @@ function ValidarComprobante() {
     setTimeout(() => printWindow.print(), 500);
   };
 
+  // Estado de validación de comprobantes (misma regla que ya usaba la tabla)
+  const estadoValidacion = (f) => {
+    const total = f.comprobantes_validables || 0;
+    const pendientes = f.comprobantes_validables_pendientes || 0;
+    if (total === 0) return { texto: 'Sin comprobantes para validar', color: 'light', total, pendientes };
+    if (pendientes > 0) return { texto: `Pendiente (${pendientes} de ${total})`, color: 'warning', total, pendientes };
+    return { texto: 'Validado', color: 'success', total, pendientes };
+  };
+
+  // Indicadores sobre la lista completa de rendiciones (no solo la página visible)
+  const resumenValidacion = (() => {
+    let pendientesValidacion = 0;
+    let validadas = 0;
+    let comprobantesPendientes = 0;
+    formatos.forEach((f) => {
+      const { total, pendientes } = estadoValidacion(f);
+      if (total > 0 && pendientes > 0) pendientesValidacion += 1;
+      if (total > 0 && pendientes === 0) validadas += 1;
+      comprobantesPendientes += pendientes;
+    });
+    return { rendiciones: formatos.length, pendientesValidacion, validadas, comprobantesPendientes };
+  })();
+
   const columns = [
     {
       Header: 'Item',
       accessor: 'id',
       Cell: ({ row }) => row.index + 1,
-      width: '8%',
+      width: '4%',
     },
     {
-      Header: 'Nº Documento',
+      Header: 'Documento',
       accessor: 'numero_documento',
       width: '12%',
-    },
-    {
-      Header: 'Ámbito',
-      accessor: 'ambito_nombre',
-      width: '15%',
-    },
-    {
-      Header: 'Lugar',
-      accessor: 'lugar',
-      width: '15%',
-    },
-    {
-      Header: 'Período',
-      accessor: 'fecha_salida',
-      Cell: ({ value }) => value ? new Date(value).toLocaleDateString('es-PE') : '-',
-      width: '12%',
-    },
-    {
-      Header: 'Modalidad',
-      accessor: 'modalidad_viaje',
-      width: '13%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row }) => (
+        <MDTypography variant="button" fontWeight="bold" color="info">
+          {row.original.numero_documento || '-'}
+        </MDTypography>
+      ),
     },
     {
       Header: 'Comisionado',
       accessor: 'usuario_nombre',
-      width: '15%',
+      width: '13%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ value }) => (
+        <MDTypography variant="button" display="block" sx={{ lineHeight: 1.3 }}>
+          {value || '-'}
+        </MDTypography>
+      ),
+    },
+    {
+      Header: 'Ámbito',
+      accessor: 'ambito_nombre',
+      width: '9%',
+    },
+    {
+      Header: 'Lugar',
+      accessor: 'lugar',
+      width: '13%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row: { original } }) => {
+        const { visibles, extra } = resumirDestinosValidacion(original.lugar);
+        return (
+          <MDTypography
+            variant="button"
+            display="block"
+            title={original.lugar || ''}
+            sx={{ lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          >
+            {visibles.join(', ')}
+            {extra > 0 ? ` (+${extra} más)` : ''}
+          </MDTypography>
+        );
+      },
+    },
+    {
+      Header: 'Fecha',
+      accessor: 'fecha_salida',
+      width: '9%',
+      Cell: ({ value }) => fechaDMYValidacion(value),
+    },
+    {
+      Header: 'Modalidad',
+      accessor: 'modalidad_viaje',
+      width: '10%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ value }) => (value ? <MDBadge badgeContent={value} color="info" variant="gradient" size="sm" /> : '-'),
     },
     {
       Header: 'Monto',
       accessor: 'monto_total',
-      Cell: ({ value }) => `S/. ${parseFloat(value || 0).toFixed(2)}`,
-      width: '12%',
+      width: '10%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ value }) => (
+        <MDTypography variant="button" fontWeight="bold" color="dark">
+          {montoPeruValidacion(value)}
+        </MDTypography>
+      ),
     },
     {
-      Header: 'Estado formato',
-      accessor: 'estado_emision',
-      Cell: ({ value }) => <Chip label={value} size="small" color="success" variant="outlined" />,
-      width: '8%',
-    },
-    {
-      Header: 'Validación comprobantes',
+      Header: 'Validación',
       accessor: 'comprobantes_pendientes',
-      Cell: ({ row }) => {
-        const total = row.original.comprobantes_validables || 0;
-        const pendientes = row.original.comprobantes_validables_pendientes || 0;
-        if (total === 0) return <Chip label="Sin comprobantes para validar" size="small" variant="outlined" />;
-        if (pendientes > 0) return <Chip label={`Pendiente (${pendientes} de ${total})`} size="small" color="warning" />;
-        return <Chip label="Validado" size="small" color="success" />;
-      },
       width: '12%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row }) => {
+        const v = estadoValidacion(row.original);
+        return <MDBadge badgeContent={v.texto} color={v.color} variant="gradient" size="sm" />;
+      },
     },
     {
       Header: 'Acciones',
-      Cell: ({ row }) => (
-        <Button
-          size="small"
-          variant="contained"
-          color="primary"
-          onClick={() => handleAbrirValidar(row.original)}
-          sx={{ color: 'white !important' }}
-        >
-          Ver
-        </Button>
-      ),
+      accessor: 'acciones',
       width: '8%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row }) => (
+        <MDBox display="flex" justifyContent="center" gap={0.5}>
+          <Tooltip title="Visualizar datos">
+            <span>
+              <IconButton
+                size="small"
+                color="info"
+                onClick={() => setFormatoVer(row.original)}
+                sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
+              >
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Revisar comprobantes">
+            <span>
+              <IconButton
+                size="small"
+                color="info"
+                onClick={() => handleAbrirValidar(row.original)}
+                sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
+              >
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </MDBox>
+      ),
     },
   ];
 
@@ -696,18 +816,38 @@ function ValidarComprobante() {
       <DashboardNavbar />
 
       <MDBox py={3}>
-        <MDBox mb={3}>
-          <MDTypography variant="h4" fontWeight="bold">
-            Validación de Comprobantes - ANEXO 3
-          </MDTypography>
-          <MDTypography variant="body2" color="textSecondary">
-            Certificaciones de Crédito con Rendición
-          </MDTypography>
+        <Card>
+          <MDBox mx={2} mt={-3} py={3} px={2} variant="gradient" bgColor="info" borderRadius="lg" coloredShadow="info">
+            <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+              Validación de Comprobantes - ANEXO 3
+            </MDTypography>
+            <MDTypography variant="button" color="white" opacity={0.8}>
+              Certificaciones de Crédito con Rendición
+            </MDTypography>
+          </MDBox>
+
+        <MDBox px={3} pt={2}>
+          <MDBox display="grid" gridTemplateColumns={{ xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }} gap={2}>
+            {[
+              { etiqueta: 'Certificaciones con rendición', valor: resumenValidacion.rendiciones },
+              { etiqueta: 'Pendientes de validación', valor: resumenValidacion.pendientesValidacion },
+              { etiqueta: 'Validadas', valor: resumenValidacion.validadas },
+              { etiqueta: 'Comprobantes pendientes de revisión', valor: resumenValidacion.comprobantesPendientes },
+            ].map((item) => (
+              <MDBox key={item.etiqueta} p={2} sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fff' }}>
+                <MDTypography variant="caption" color="secondary" fontWeight="bold" display="block">
+                  {item.etiqueta}
+                </MDTypography>
+                <MDTypography variant="h6" fontWeight="bold" color="dark">
+                  {item.valor}
+                </MDTypography>
+              </MDBox>
+            ))}
+          </MDBox>
         </MDBox>
 
         {error && <Alert severity="error">{error}</Alert>}
 
-        <Card>
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
               <CircularProgress />
@@ -725,8 +865,11 @@ function ValidarComprobante() {
                 ),
               }}
               isSorted={true}
-              entriesPerPage={false}
+              canSearch
+              entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
+              showTotalEntries
               noEndBorder
+              vistaMovil
             />
           )}
         </Card>
@@ -867,22 +1010,13 @@ function ValidarComprobante() {
                                   : (<Chip size="small" label="Pendiente" color="warning" variant="outlined" />)}
                               </td>
                               <td style={{ padding: '10px', textAlign: 'center', border: '1px solid #eee' }}>
-                                {comprobante.estado_rendicion === 'VALIDADO' ? (<Button size="small" variant="contained" onClick={() => imprimirResultado({ mensaje: comprobante.validacion_mensaje || 'Comprobante validado (resultado no registrado)' })} sx={{ backgroundColor: '#1976d2 !important', color: 'white !important', fontSize: '0.75rem', padding: '4px 8px' }}>🖨️ Imprimir</Button>) : comprobante.estado_rendicion === 'MANUAL' ? null : (<Button
-                                  size="small"
-                                  variant="contained"
-                                  onClick={() => validarEnSunat(comprobante)}
-                                  disabled={loadingSunat}
-                                  sx={{
-                                    backgroundColor: '#d32f2f !important',
-                                    color: 'white !important',
-                                    fontSize: '0.75rem',
-                                    padding: '4px 8px',
-                                    '&:hover': { backgroundColor: '#b71c1c !important' },
-                                    '&:disabled': { opacity: 0.6 }
-                                  }}
-                                >
-                                  {loadingSunat ? '⏳' : '✓'}
-                                </Button>)}
+                                {comprobante.estado_rendicion === 'VALIDADO' ? (<Tooltip title="Imprimir"><span><IconButton size="small" color="warning" onClick={() => imprimirResultado({ mensaje: comprobante.validacion_mensaje || 'Comprobante validado (resultado no registrado)' })} sx={{ backgroundColor: '#fff3e0', '&:hover': { backgroundColor: '#ffe0b2' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}><PrintIcon fontSize="small" /></IconButton></span></Tooltip>) : comprobante.estado_rendicion === 'MANUAL' ? null : (<Tooltip title="Validar en SUNAT">
+                                    <span>
+                                      <IconButton size="small" color="success" onClick={() => validarEnSunat(comprobante)} disabled={loadingSunat} sx={{ backgroundColor: '#e8f5e9', '&:hover': { backgroundColor: '#c8e6c9' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}>
+                                        <CheckCircleIcon fontSize="small" />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>)}
                               </td>
                             </tr>
                           ))}
@@ -1132,6 +1266,64 @@ function ValidarComprobante() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Drawer con los datos generales de la comisión */}
+      <Drawer
+        anchor="right"
+        open={Boolean(formatoVer)}
+        onClose={() => setFormatoVer(null)}
+        PaperProps={{ sx: { width: { xs: '100%', sm: 440 } } }}
+      >
+        <MDBox px={3} py={2} display="flex" justifyContent="space-between" alignItems="center" sx={{ backgroundColor: '#1A73E8' }}>
+          <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+            Datos de la comisión
+          </MDTypography>
+          <IconButton size="small" onClick={() => setFormatoVer(null)} sx={{ color: '#fff' }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </MDBox>
+        {formatoVer && (
+          <MDBox p={3}>
+            <SeccionVerValidacion numero="A" titulo="Datos generales">
+              <DatoVerValidacion etiqueta="Documento">{formatoVer.numero_documento || '-'}</DatoVerValidacion>
+              <DatoVerValidacion etiqueta="Comisionado">{formatoVer.usuario_nombre || '-'}</DatoVerValidacion>
+              <DatoVerValidacion etiqueta="Ámbito">{formatoVer.ambito_nombre || '-'}</DatoVerValidacion>
+              <DatoVerValidacion etiqueta="Lugar">
+                {resumirDestinosValidacion(formatoVer.lugar).partes.length ? (
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {resumirDestinosValidacion(formatoVer.lugar).partes.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  '-'
+                )}
+              </DatoVerValidacion>
+              <DatoVerValidacion etiqueta="Fecha de salida">{fechaDMYValidacion(formatoVer.fecha_salida)}</DatoVerValidacion>
+              <DatoVerValidacion etiqueta="Fecha de retorno">{fechaDMYValidacion(formatoVer.fecha_retorno)}</DatoVerValidacion>
+              <DatoVerValidacion etiqueta="Modalidad">{formatoVer.modalidad_viaje || '-'}</DatoVerValidacion>
+              <DatoVerValidacion etiqueta="Monto">{montoPeruValidacion(formatoVer.monto_total)}</DatoVerValidacion>
+            </SeccionVerValidacion>
+            <SeccionVerValidacion numero="B" titulo="Validación de comprobantes">
+              <DatoVerValidacion etiqueta="Estado">{estadoValidacion(formatoVer).texto}</DatoVerValidacion>
+              <DatoVerValidacion etiqueta="Comprobantes para validar">{estadoValidacion(formatoVer).total}</DatoVerValidacion>
+              <DatoVerValidacion etiqueta="Pendientes">{estadoValidacion(formatoVer).pendientes}</DatoVerValidacion>
+            </SeccionVerValidacion>
+            <MDButton
+              variant="gradient"
+              color="info"
+              fullWidth
+              onClick={() => {
+                const f = formatoVer;
+                setFormatoVer(null);
+                handleAbrirValidar(f);
+              }}
+            >
+              Revisar comprobantes
+            </MDButton>
+          </MDBox>
+        )}
+      </Drawer>
 
       <Footer />
     </DashboardLayout>

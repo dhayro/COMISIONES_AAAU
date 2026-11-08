@@ -170,6 +170,7 @@ function GestionAprobaciones() {
     {
       Header: 'Item',
       accessor: 'item',
+      disableSortBy: true,
       width: '5%',
       // eslint-disable-next-line react/prop-types
       Cell: ({ row }) => {
@@ -177,9 +178,31 @@ function GestionAprobaciones() {
         return row.index + 1;
       },
     },
-    { Header: 'Usuario', accessor: 'usuario_nombre', width: '15%' },
+    { Header: 'Usuario', accessor: 'usuario_nombre', width: '18%' },
     { Header: 'Ámbito', accessor: 'ambito_nombre', width: '12%' },
-    { Header: 'Lugar', accessor: 'lugar', width: '12%' },
+    {
+      Header: 'Lugar',
+      accessor: 'lugar',
+      width: '14%',
+      // eslint-disable-next-line react/prop-types,react/display-name
+      Cell: ({ row: { original } }) => {
+        // eslint-disable-next-line react/prop-types
+        const texto = original.lugar || '';
+        const partes = String(texto).split(/,s*|s+Ys+/).map((p) => p.trim()).filter(Boolean);
+        const extra = Math.max(partes.length - 2, 0);
+        return (
+          <MDTypography
+            variant="button"
+            display="block"
+            title={texto}
+            sx={{ lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          >
+            {partes.slice(0, 2).join(', ')}
+            {extra > 0 ? ` (+${extra} más)` : ''}
+          </MDTypography>
+        );
+      },
+    },
     { Header: 'Modalidad', accessor: 'modalidad_viaje', width: '11%' },
     {
       Header: 'Días',
@@ -202,27 +225,34 @@ function GestionAprobaciones() {
         const fechaSalida = row.original.fecha_salida;
         // eslint-disable-next-line react/prop-types
         const fechaRetorno = row.original.fecha_retorno;
-        if (fechaSalida && fechaRetorno) {
-          return `${new Date(fechaSalida).toLocaleDateString('es-ES')} - ${new Date(
-            fechaRetorno
-          ).toLocaleDateString('es-ES')}`;
-        }
-        return '-';
+        const dmy = (v) => {
+          const [a, m, d] = String(v).slice(0, 10).split('-');
+          return a && m && d ? `${d}/${m}/${a}` : '-';
+        };
+        if (!fechaSalida || !fechaRetorno) return '-';
+        return (
+          <MDBox lineHeight={1.3}>
+            <MDTypography variant="button" display="block" sx={{ whiteSpace: 'nowrap' }}>{dmy(fechaSalida)}</MDTypography>
+            <MDTypography variant="caption" color="text" display="block" sx={{ whiteSpace: 'nowrap' }}>al {dmy(fechaRetorno)}</MDTypography>
+          </MDBox>
+        );
       },
     },
     {
-      Header: 'Costo (S/.)',
+      Header: 'Costo total',
       accessor: 'costo_total_comision',
       width: '10%',
       // eslint-disable-next-line react/prop-types,react/display-name
       Cell: ({ row }) => {
         // eslint-disable-next-line react/prop-types
-        const monto = parseFloat(row.original.costo_total_comision || 0).toFixed(2);
-        return monto;
+        const monto = Number(row.original.costo_total_comision || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return <MDTypography variant="button" fontWeight="bold" color="dark">{monto}</MDTypography>;
       },
     },
     {
       Header: 'Acciones',
+      accessor: 'acciones',
+      disableSortBy: true,
       width: '12%',
       // eslint-disable-next-line react/prop-types,react/display-name
       Cell: ({ row }) => {
@@ -277,9 +307,14 @@ function GestionAprobaciones() {
             borderRadius="lg"
             coloredShadow="info"
           >
-            <MDTypography variant="h6" color="white" fontWeight="medium">
-              Aprobación de Comisiones
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" fontWeight="medium" sx={{ textTransform: 'uppercase' }}>
+                Aprobación de Comisiones
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Revise y apruebe las comisiones pendientes.
+              </MDTypography>
+            </MDBox>
           </MDBox>
 
           <MDBox p={3}>
@@ -382,10 +417,11 @@ function GestionAprobaciones() {
                     }),
                   }}
                   canSearch
-                  isSorted={false}
+                  isSorted={true}
                   entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                   showTotalEntries
                   noEndBorder
+                  vistaMovil
                 />
               </MDBox>
             ) : (

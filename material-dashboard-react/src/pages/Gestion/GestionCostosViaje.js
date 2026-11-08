@@ -170,9 +170,14 @@ function GestionCostosViaje() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Costos de Viaje
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Costos de Viaje
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre los costos de viaje por tipo de gasto.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="white"
@@ -199,7 +204,7 @@ function GestionCostosViaje() {
                 <DataTable
                   table={{
                     columns: [
-                      { Header: 'ID', accessor: 'id', width: '10%' },
+                      { Header: 'Item', accessor: 'item', disableSortBy: true, width: '10%', Cell: ({ row }) => row.index + 1 },
                       { Header: 'Nombre', accessor: 'nombre', width: '50%' },
                       {
                         Header: 'Costo',
@@ -209,6 +214,7 @@ function GestionCostosViaje() {
                       {
                         Header: 'Acciones',
                         accessor: 'acciones',
+                        disableSortBy: true,
                         width: '20%',
                         // eslint-disable-next-line react/prop-types
                         Cell: ({ row }) => {
@@ -251,10 +257,11 @@ function GestionCostosViaje() {
                     rows: items,
                   }}
                   canSearch
-                  isSorted={false}
+                  isSorted={true}
                   entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                   showTotalEntries
                   noEndBorder
+                  vistaMovil
                 />
               )}
               {loading && <CircularProgress />}

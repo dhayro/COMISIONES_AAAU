@@ -250,9 +250,14 @@ function GestionUsuarios() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Usuarios
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Usuarios
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre los usuarios del sistema y sus roles.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="white"
@@ -282,25 +287,26 @@ function GestionUsuarios() {
               <DataTable
                 table={{
                   columns: [
-                    { Header: 'ID', accessor: 'id', width: '6%' },
-                    { Header: 'Nombre', accessor: 'nombre', width: '18%' },
-                    { Header: 'Usuario', accessor: 'username', width: '16%' },
+                    { Header: 'Item', accessor: 'item', disableSortBy: true, width: '5%', Cell: ({ row }) => row.index + 1 },
+                    { Header: 'Nombre', accessor: 'nombre', width: '16%' },
+                    { Header: 'Usuario', accessor: 'username', width: '14%' },
                     { Header: 'DNI', accessor: 'dni', width: '12%' },
-                    { Header: 'Email', accessor: 'email', width: '20%' },
+                    { Header: 'Email', accessor: 'email', width: '16%' },
                     { Header: 'Rol', accessor: 'rol', width: '10%' },
                     {
                       Header: 'Cargo',
                       accessor: (row) => row.cargo_nombre || 'Sin cargo',
-                      width: '12%',
+                      width: '11%',
                     },
                     {
                       Header: 'Ámbito',
                       accessor: (row) => row.ambito_nombre || 'Sin ámbito',
-                      width: '11%',
+                      width: '10%',
                     },
                     {
                       Header: 'Acciones',
                       accessor: 'acciones',
+                      disableSortBy: true,
                       width: '6%',
                       disableSortBy: true,
                       // eslint-disable-next-line react/prop-types
@@ -355,10 +361,11 @@ function GestionUsuarios() {
                   rows: usuarios,
                 }}
                 canSearch
-                isSorted={false}
+                isSorted={true}
                 entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                 showTotalEntries
                 noEndBorder
+                vistaMovil
               />
             )}
           </MDBox>

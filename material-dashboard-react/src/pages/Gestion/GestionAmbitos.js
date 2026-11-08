@@ -183,9 +183,14 @@ function GestionAmbitos() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Ámbitos
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Ámbitos
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre los ámbitos y sus datos de referencia.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="white"
@@ -248,12 +253,13 @@ function GestionAmbitos() {
                           </IconButton>
                         ),
                       },
-                      { Header: 'ID', accessor: 'id', width: '10%' },
+                      { Header: 'Item', accessor: 'item', disableSortBy: true, width: '10%', Cell: ({ row }) => row.index + 1 },
                       { Header: 'Nombre Corto', accessor: 'nombre_corto', width: '25%' },
                       { Header: 'Nombre Largo', accessor: 'nombre_largo', width: '40%' },
                       {
                         Header: 'Acciones',
                         accessor: 'acciones',
+                        disableSortBy: true,
                         width: '15%',
                         disableSortBy: true,
                         // eslint-disable-next-line react/prop-types
@@ -294,10 +300,11 @@ function GestionAmbitos() {
                     rows: ambitosAAA,
                   }}
                   canSearch
-                  isSorted={false}
+                  isSorted={true}
                   entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                   showTotalEntries
                   noEndBorder
+                  vistaMovil
                 />
 
                 {selectedAAA && (
@@ -357,6 +364,7 @@ function GestionAmbitos() {
                                 {
                                   Header: 'Acciones',
                                   accessor: 'acciones',
+                                  disableSortBy: true,
                                   width: '15%',
                                   disableSortBy: true,
                                   // eslint-disable-next-line react/prop-types
@@ -401,6 +409,7 @@ function GestionAmbitos() {
                             entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                             showTotalEntries
                             noEndBorder
+                            vistaMovil
                           />
                         ) : (
                           <MDTypography variant="body2" sx={{ color: '#999', fontStyle: 'italic' }}>

@@ -162,9 +162,14 @@ function GestionClasificadores() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Clasificadores
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Clasificadores
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre los clasificadores de gasto y sus partidas.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="white"
@@ -191,13 +196,14 @@ function GestionClasificadores() {
                 <DataTable
                   table={{
                     columns: [
-                      { Header: 'ID', accessor: 'id', width: '8%' },
+                      { Header: 'Item', accessor: 'item', disableSortBy: true, width: '8%', Cell: ({ row }) => row.index + 1 },
                       { Header: 'Partida', accessor: 'partida', width: '14%' },
                       { Header: 'Nombre', accessor: 'nombre', width: '40%' },
                       { Header: 'Descripción', accessor: 'descripcion', width: '20%' },
                       {
                         Header: 'Acciones',
                         accessor: 'acciones',
+                        disableSortBy: true,
                         width: '18%',
                         // eslint-disable-next-line react/prop-types
                         Cell: ({ row }) => {
@@ -240,10 +246,11 @@ function GestionClasificadores() {
                     rows: items,
                   }}
                   canSearch
-                  isSorted={false}
+                  isSorted={true}
                   entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                   showTotalEntries
                   noEndBorder
+                  vistaMovil
                 />
               )}
               {loading && <CircularProgress />}

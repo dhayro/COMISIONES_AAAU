@@ -19,7 +19,7 @@ import PropTypes from 'prop-types';
 // Material Dashboard 2 React components
 import MDBox from 'components/MDBox';
 
-function DataTableBodyCell({ noBorder, align, children }) {
+function DataTableBodyCell({ noBorder, align, nowrap, children }) {
   return (
     <MDBox
       component="td"
@@ -32,10 +32,11 @@ function DataTableBodyCell({ noBorder, align, children }) {
       })}
     >
       <MDBox
-        display="inline-block"
+        display={align === 'center' ? 'flex' : 'inline-block'}
+        justifyContent={align === 'center' ? 'center' : 'flex-start'}
         width="max-content"
         color="text"
-        sx={{ verticalAlign: 'middle' }}
+        sx={{ verticalAlign: 'middle', whiteSpace: nowrap ? 'nowrap' : 'normal' }}
       >
         {children}
       </MDBox>

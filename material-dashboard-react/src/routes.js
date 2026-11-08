@@ -66,6 +66,7 @@ import GestionMetas from 'pages/Gestion/GestionMetas';
 import GestionFuentesFinanciamiento from 'pages/Gestion/GestionFuentesFinanciamiento';
 import GestionCargos from 'pages/Gestion/GestionCargos';
 import GestionFeriados from 'pages/Gestion/GestionFeriados';
+import SeguimientoVencimientos from 'pages/Gestion/SeguimientoVencimientos';
 import EmisionFormatos from 'pages/Gestion/EmisionFormatos';
 import GestionCertificacionesCredito from 'pages/Gestion/GestionCertificacionesCredito';
 import GestionCertificacionesFormatos from 'pages/Gestion/GestionCertificacionesFormatos';
@@ -158,6 +159,14 @@ function filtrarRutasPorRol(rolUsuario) {
         route: '/aprobaciones',
         component: <GestionAprobaciones />,
       },
+      {
+        type: 'collapse',
+        name: 'Vencimientos Rendición',
+        key: 'seguimiento-vencimientos',
+        icon: <Icon fontSize="small">schedule</Icon>,
+        route: '/seguimiento/vencimientos',
+        component: <SeguimientoVencimientos />,
+        },
       { type: 'divider', key: 'divider-dev-jefe' },
       { type: 'title', title: 'Desarrollo', key: 'desarrollo-title-jefe' },
       {
@@ -293,6 +302,14 @@ function filtrarRutasPorRol(rolUsuario) {
         route: '/calendario',
         component: <Calendario />,
       },
+      {
+        type: 'collapse',
+        name: 'Vencimientos Rendición',
+        key: 'seguimiento-vencimientos',
+        icon: <Icon fontSize="small">schedule</Icon>,
+        route: '/seguimiento/vencimientos',
+        component: <SeguimientoVencimientos />,
+        },
       { type: 'divider', key: 'divider-dev-admin' },
       { type: 'title', title: 'Desarrollo', key: 'desarrollo-title-admin' },
       {
@@ -491,6 +508,14 @@ const allRoutes = [
     route: '/aprobaciones',
     component: <GestionAprobaciones />,
   },
+    {
+      type: 'collapse',
+      name: 'Vencimientos Rendición',
+      key: 'seguimiento-vencimientos',
+      icon: <Icon fontSize="small">schedule</Icon>,
+      route: '/seguimiento/vencimientos',
+      component: <SeguimientoVencimientos />,
+      },
   {
     type: 'collapse',
     name: 'Calendario',

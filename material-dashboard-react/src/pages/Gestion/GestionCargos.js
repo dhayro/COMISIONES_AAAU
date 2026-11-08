@@ -210,12 +210,16 @@ function GestionCargos() {
     acciones: (
       <MDBox display="flex" gap={1}>
         <Tooltip title="Editar">
-          <IconButton size="small" color="info" onClick={() => handleOpenDialog(cargo)}>
+          <IconButton size="small" color="info" onClick={() => handleOpenDialog(cargo)}
+      sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
+    >
             <EditIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Eliminar">
-          <IconButton size="small" color="error" onClick={() => handleEliminar(cargo.id)}>
+          <IconButton size="small" color="error" onClick={() => handleEliminar(cargo.id)}
+      sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: '#ffcdd2' } }}
+    >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -225,7 +229,7 @@ function GestionCargos() {
 
   const columns = [
     { Header: 'Nombre', accessor: 'nombre', width: '80%' },
-    { Header: 'Acciones', accessor: 'acciones', align: 'center', width: '20%' },
+    { Header: 'Acciones', accessor: 'acciones', disableSortBy: true, align: 'center', width: '20%' },
   ];
 
   return (
@@ -246,9 +250,14 @@ function GestionCargos() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Cargos
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Cargos
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre los cargos del personal.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="info"
@@ -266,10 +275,12 @@ function GestionCargos() {
             ) : (
               <DataTable
                 table={{ columns, rows }}
-                isSorted={false}
-                entriesPerPage={false}
-                showTotalEntries={false}
+                isSorted={true}
+                canSearch
+                entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
+                showTotalEntries
                 noEndBorder
+                vistaMovil
               />
             )}
           </MDBox>

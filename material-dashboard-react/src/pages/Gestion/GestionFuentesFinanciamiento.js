@@ -235,12 +235,16 @@ function GestionFuentesFinanciamiento() {
     acciones: (
       <MDBox display="flex" gap={1}>
         <Tooltip title="Editar">
-          <IconButton size="small" color="info" onClick={() => handleOpenDialog(fuente)}>
+          <IconButton size="small" color="info" onClick={() => handleOpenDialog(fuente)}
+      sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
+    >
             <EditIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Eliminar">
-          <IconButton size="small" color="error" onClick={() => handleEliminar(fuente.id)}>
+          <IconButton size="small" color="error" onClick={() => handleEliminar(fuente.id)}
+      sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: '#ffcdd2' } }}
+    >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -252,7 +256,7 @@ function GestionFuentesFinanciamiento() {
     { Header: 'Nombre', accessor: 'nombre', width: '40%' },
     { Header: 'Abreviatura', accessor: 'abreviatura', width: '20%' },
     { Header: 'Descripción', accessor: 'descripcion', width: '30%' },
-    { Header: 'Acciones', accessor: 'acciones', align: 'center', width: '10%' },
+    { Header: 'Acciones', accessor: 'acciones', disableSortBy: true, align: 'center', width: '10%' },
   ];
 
   return (
@@ -273,9 +277,14 @@ function GestionFuentesFinanciamiento() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Fuentes de Financiamiento
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Fuentes de Financiamiento
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre las fuentes de financiamiento disponibles.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="info"
@@ -293,10 +302,12 @@ function GestionFuentesFinanciamiento() {
             ) : (
               <DataTable
                 table={{ columns, rows }}
-                isSorted={false}
-                entriesPerPage={false}
-                showTotalEntries={false}
+                isSorted={true}
+                canSearch
+                entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
+                showTotalEntries
                 noEndBorder
+                vistaMovil
               />
             )}
           </MDBox>

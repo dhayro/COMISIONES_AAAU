@@ -223,12 +223,16 @@ function GestionTipoComprobante() {
     acciones: (
       <MDBox display="flex" gap={1}>
         <Tooltip title="Editar">
-          <IconButton size="small" color="info" onClick={() => handleOpenDialog(tipo)}>
+          <IconButton size="small" color="info" onClick={() => handleOpenDialog(tipo)}
+      sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
+    >
             <EditIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Eliminar">
-          <IconButton size="small" color="error" onClick={() => handleEliminar(tipo.id)}>
+          <IconButton size="small" color="error" onClick={() => handleEliminar(tipo.id)}
+      sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: '#ffcdd2' } }}
+    >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -239,7 +243,7 @@ function GestionTipoComprobante() {
   const columns = [
     { Header: 'Nombre', accessor: 'nombre', width: '50%' },
     { Header: 'Descripción', accessor: 'descripcion', width: '30%' },
-    { Header: 'Acciones', accessor: 'acciones', align: 'center', width: '20%' },
+    { Header: 'Acciones', accessor: 'acciones', disableSortBy: true, align: 'center', width: '20%' },
   ];
 
   return (
@@ -260,9 +264,14 @@ function GestionTipoComprobante() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Tipos de Comprobante
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Tipos de Comprobante
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre los tipos de comprobante aceptados en las rendiciones.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="info"
@@ -280,10 +289,12 @@ function GestionTipoComprobante() {
             ) : (
               <DataTable
                 table={{ columns, rows }}
-                isSorted={false}
-                entriesPerPage={false}
-                showTotalEntries={false}
+                isSorted={true}
+                canSearch
+                entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
+                showTotalEntries
                 noEndBorder
+                vistaMovil
               />
             )}
           </MDBox>

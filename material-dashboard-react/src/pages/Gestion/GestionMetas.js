@@ -29,6 +29,7 @@ function GestionMetas() {
   const [metas, setMetas] = useState([]);
   const [ambitos, setAmbitos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
@@ -279,9 +280,14 @@ function GestionMetas() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Metas
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Metas
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre las metas presupuestarias.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="info"
@@ -300,7 +306,7 @@ function GestionMetas() {
               <DataTable
                 table={{
                   columns: [
-                    { Header: 'ID', accessor: 'id', width: '8%' },
+                    { Header: 'Item', accessor: 'item', disableSortBy: true, width: '8%', Cell: ({ row }) => row.index + 1 },
                     { Header: 'Nombre', accessor: 'nombre', width: '30%' },
                     { Header: 'Número', accessor: 'numero_meta', width: '15%' },
                     { Header: 'Período', accessor: 'periodo', width: '15%' },
@@ -312,6 +318,7 @@ function GestionMetas() {
                     {
                       Header: 'Acciones',
                       accessor: 'acciones',
+                      disableSortBy: true,
                       width: '14%',
                       disableSortBy: true,
                       // eslint-disable-next-line react/prop-types
@@ -352,9 +359,10 @@ function GestionMetas() {
                   rows: metas,
                 }}
                 canSearch
-                isSorted={false}
+                isSorted={true}
                 entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                 showTotalEntries
+                vistaMovil
               />
             )}
           </MDBox>

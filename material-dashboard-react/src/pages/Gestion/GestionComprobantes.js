@@ -117,24 +117,31 @@ const GestionComprobantes = () => {
   // 📊 Tabla de datos
   const columns = useMemo(
     () => [
-      { Header: 'ID', accessor: 'id', width: '60px' },
-      { Header: 'Formato', accessor: 'formato_emision_id', width: '100px' },
-      { Header: 'N° Comprobante', accessor: 'numero_comprobante' },
-      { Header: 'Tipo', accessor: 'tipo_comprobante', width: '90px' },
+      { Header: 'Item', accessor: 'item', disableSortBy: true, width: '5%', Cell: ({ row }) => row.index + 1 },
+      { Header: 'Formato', accessor: 'formato_emision_id', width: '10%' },
+      { Header: 'N° Comprobante', accessor: 'numero_comprobante', width: '15%' },
+      { Header: 'Tipo', accessor: 'tipo_comprobante', width: '9%' },
       {
         Header: 'Fecha',
         accessor: 'fecha_comprobante',
+        width: '10%',
         Cell: ({ value }) => new Date(value).toLocaleDateString('es-PE'),
       },
-      { Header: 'Proveedor', accessor: 'proveedor_razon_social' },
+      { Header: 'Proveedor', accessor: 'proveedor_razon_social', width: '17%' },
       {
         Header: 'Monto',
         accessor: 'monto',
-        Cell: ({ value }) => `S/. ${parseFloat(value).toFixed(2)}`,
+        width: '10%',
+        Cell: ({ value }) => (
+          <MDTypography variant="button" fontWeight="bold" color="dark">
+            {Number(value || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </MDTypography>
+        ),
       },
       {
         Header: 'Estado',
         accessor: 'estado_rendicion',
+        width: '10%',
         Cell: ({ value }) => {
           const { color, bg } = getBadgeColor(value);
           return (
@@ -157,7 +164,10 @@ const GestionComprobantes = () => {
       },
       {
         Header: 'Acciones',
-        accessor: 'id',
+        accessor: 'acciones',
+        disableSortBy: true,
+        width: '14%',
+        align: 'center',
         Cell: ({ row }) => (
           <MDBox sx={{ display: 'flex', gap: 1 }}>
             <Button
@@ -209,18 +219,23 @@ const GestionComprobantes = () => {
       <DashboardNavbar />
 
       <MDBox py={3}>
-        <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <MDTypography variant="h4" fontWeight="bold">
-            📦 Gestión de Comprobantes
-          </MDTypography>
-          <MDButton variant="gradient" color="info" onClick={cargarComprobantes}>
-            🔄 Recargar
-          </MDButton>
-        </MDBox>
+        <Card>
+          <MDBox mx={2} mt={-3} display="flex" justifyContent="space-between" alignItems="center" py={3} px={2} variant="gradient" bgColor="info" borderRadius="lg" coloredShadow="info">
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Comprobantes
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Revise los comprobantes registrados en las rendiciones.
+              </MDTypography>
+            </MDBox>
+            <MDButton variant="contained" color="white" onClick={cargarComprobantes}>
+              Recargar
+            </MDButton>
+          </MDBox>
 
         {error && <Alert severity="error">{error}</Alert>}
 
-        <Card>
           <MDBox pt={3} px={3}>
             {comprobantes.length === 0 ? (
               <Alert severity="info">No hay comprobantes registrados aún</Alert>
@@ -231,6 +246,7 @@ const GestionComprobantes = () => {
                 entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                 showTotalEntries={true}
                 noEndBorder
+                vistaMovil
               />
             )}
           </MDBox>

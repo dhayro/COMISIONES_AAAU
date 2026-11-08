@@ -13,6 +13,8 @@ import {
   Box,
   Autocomplete,  // 🆕 Importar Autocomplete
   Checkbox,  // 🆕 Importar Checkbox
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import MDBox from 'components/MDBox';
 import MDButton from 'components/MDButton';
@@ -25,12 +27,20 @@ import api from 'services/api';
 import Swal from 'sweetalert2';
 import PrintIcon from '@mui/icons-material/Print';
 import DescriptionIcon from '@mui/icons-material/Description';
+import TagIcon from '@mui/icons-material/Tag';
+import UndoIcon from '@mui/icons-material/Undo';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import EditNoteIcon from '@mui/icons-material/EditNote';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import * as pdfjsLib from 'pdfjs-dist';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloseIcon from '@mui/icons-material/Close';
+import Drawer from '@mui/material/Drawer';
+import MDBadge from 'components/MDBadge';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useAuth } from 'context/AuthContext'; // 🆕 Importar AuthContext
@@ -38,6 +48,40 @@ import decolectaService from 'services/decolecta';
 
 // Configurar worker de PDF.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+// Destinos de la comisión: se muestran los dos primeros y el resto se indica con "+N"
+const resumirDestinos = (texto = '') => {
+  const partes = String(texto)
+    .split(/,\s*|\s+Y\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return { visibles: partes.slice(0, 2), extra: Math.max(partes.length - 2, 0), partes };
+};
+
+// Fecha corta dd/mm/aaaa (guion en vacío)
+const fechaCorta = (valor) => (valor ? new Date(valor).toLocaleDateString('es-ES') : '-');
+
+// Sección del Drawer de emisión
+const SeccionVerEmision = ({ numero, titulo, children }) => (
+  <MDBox mb={2.5}>
+    <MDTypography variant="caption" fontWeight="bold" color="info" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      {numero} · {titulo}
+    </MDTypography>
+    <MDBox mt={0.5} p={2} sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fafbfc' }}>
+      {children}
+    </MDBox>
+  </MDBox>
+);
+
+// Dato con etiqueta; el valor va en MDBox para poder contener listas
+const DatoVerEmision = ({ etiqueta, children }) => (
+  <MDBox mb={1}>
+    <MDTypography variant="caption" fontWeight="bold" color="secondary" display="block">
+      {etiqueta}
+    </MDTypography>
+    <MDBox sx={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>{children}</MDBox>
+  </MDBox>
+);
 
 // 🆕 FUNCIÓN AUXILIAR: Obtener fecha ACTUAL en zona horaria de Perú (para fecha_emision)
 const obtenerFechaEmisionPerú = () => {
@@ -164,6 +208,7 @@ function EmisionFormatos() {
   const [openSiafCut, setOpenSiafCut] = useState(false);
   const [formatoSiafCut, setFormatoSiafCut] = useState(null);
   const [feriadosSet, setFeriadosSet] = useState(new Set());
+  const [formatoVer, setFormatoVer] = useState(null);
 
   useEffect(() => {
     api.request('/feriados')
@@ -2829,7 +2874,7 @@ function EmisionFormatos() {
       doc.setFontSize(8);
       doc.setFont(undefined, 'normal');
       doc.setTextColor(100, 100, 100);
-      const fechaCreacion = formatoCompleto?.fecha_emision ? new Date(formatoCompleto.fecha_emision) : new Date();
+      const fechaCreacion = new Date();
       const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
       const mesesNombre = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
       const fechaFormato = `${diasSemana[fechaCreacion.getDay()]}, ${fechaCreacion.getDate()} de ${mesesNombre[fechaCreacion.getMonth()]} del ${fechaCreacion.getFullYear()} a las ${fechaCreacion.toLocaleTimeString('es-ES')}`;
@@ -5324,11 +5369,139 @@ function EmisionFormatos() {
     }
   };
 
+  // Clasificación de la rendición a partir de los estados reales del backend.
+  // La celda y los indicadores usan esta misma función para no contradecirse.
+  const clasificarRendicion = (o) => {
+    const { fecha_retorno, estado_emision } = o;
+    if (!fecha_retorno) return { tipo: 'SIN_FECHA' };
+    if (estado_emision === 'RENDIDO') {
+      const fechaRend = String(o.formato_existente?.fecha_rendicion || '').slice(0, 10);
+      if (!fechaRend) return { tipo: 'RENDIDO' };
+      const [ra, rm, rd] = fechaRend.split('-').map(Number);
+      const rendidoEl = new Date(ra, rm - 1, rd);
+      const vencimiento = calcularVencimientoRendicion(fecha_retorno);
+      return {
+        tipo: rendidoEl <= vencimiento ? 'RENDIDO_EN_PLAZO' : 'RENDIDO_FUERA_PLAZO',
+        rendidoEl,
+        vencimiento,
+      };
+    }
+    if (estado_emision === 'DEVUELTO') return { tipo: 'DEVUELTO' };
+    if (!['EMITIDO', 'ENVIADO', 'PAGADO', 'RINDIENDO'].includes(estado_emision)) return { tipo: 'NO_APLICA' };
+    const vencimiento = calcularVencimientoRendicion(fecha_retorno);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    if (vencimiento < hoy) return { tipo: 'VENCIDO', vencimiento };
+    return { tipo: 'PENDIENTE', vencimiento, diasRestantes: contarDiasHabilesHasta(vencimiento) };
+  };
+
+  // Etiqueta visual de la rendición (null cuando no aplica)
+  const etiquetaRendicion = (c) => {
+    switch (c.tipo) {
+      case 'RENDIDO':
+        return { texto: 'Rendido', color: 'success' };
+      case 'RENDIDO_EN_PLAZO':
+        return { texto: 'En plazo', color: 'success' };
+      case 'RENDIDO_FUERA_PLAZO':
+        return { texto: 'Fuera de plazo', color: 'error' };
+      case 'DEVUELTO':
+        return { texto: 'Devuelto', color: 'light' };
+      case 'VENCIDO':
+        return { texto: 'Vencido', color: 'error' };
+      case 'PENDIENTE':
+        return c.diasRestantes <= 3
+          ? { texto: 'Por vencer', color: 'warning' }
+          : { texto: 'En plazo', color: 'success' };
+      default:
+        return null;
+    }
+  };
+
+  const montoPeruEmision = (valor) =>
+    Number(valor || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Indicadores sobre el conjunto completo de comisiones (no solo la página)
+  const resumenEmision = (() => {
+    let pendientesEmision = 0;
+    let enPlazo = 0;
+    let vencidas = 0;
+    let rendidas = 0;
+    comisiones.forEach((o) => {
+      if (!o.tiene_formato) pendientesEmision += 1;
+      const c = clasificarRendicion(o);
+      if (c.tipo === 'VENCIDO') vencidas += 1;
+      if (['RENDIDO', 'RENDIDO_EN_PLAZO', 'RENDIDO_FUERA_PLAZO'].includes(c.tipo)) rendidas += 1;
+      if (c.tipo === 'RENDIDO_EN_PLAZO' || (c.tipo === 'PENDIENTE' && c.diasRestantes > 3)) enPlazo += 1;
+    });
+    return { total: comisiones.length, pendientesEmision, enPlazo, vencidas, rendidas };
+  })();
+
+  // Contenido del Drawer: todos los datos de la comisión, por secciones
+  const renderVerFormato = (o) => {
+    const f = o.formato_existente || {};
+    const c = clasificarRendicion(o);
+    const et = etiquetaRendicion(c);
+    const destinos = resumirDestinos(o.lugar).partes;
+    return (
+      <>
+        <SeccionVerEmision numero="01" titulo="Información del documento">
+          <DatoVerEmision etiqueta="N° de documento">{o.numero_documento || 'Sin formato emitido'}</DatoVerEmision>
+          <DatoVerEmision etiqueta="Estado del formato">{f.estado_emision || o.estado_emision || '-'}</DatoVerEmision>
+          <DatoVerEmision etiqueta="Tipo de emisión">{f.tipo_emision || '-'}</DatoVerEmision>
+          <DatoVerEmision etiqueta="SIAF">{f.numero_siaf || '-'}</DatoVerEmision>
+          <DatoVerEmision etiqueta="CUT">{f.numero_cut || '-'}</DatoVerEmision>
+        </SeccionVerEmision>
+        <SeccionVerEmision numero="02" titulo="Información del comisionado">
+          <DatoVerEmision etiqueta="Comisionado">{o.usuario_nombre || '-'}</DatoVerEmision>
+        </SeccionVerEmision>
+        <SeccionVerEmision numero="03" titulo="Ámbito y destinos">
+          <DatoVerEmision etiqueta="Ámbito">{o.ambito_nombre || '-'}</DatoVerEmision>
+          <DatoVerEmision etiqueta="Destinos">
+            {destinos.length ? (
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {destinos.map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+              </ul>
+            ) : (
+              '-'
+            )}
+          </DatoVerEmision>
+        </SeccionVerEmision>
+        <SeccionVerEmision numero="04" titulo="Período de la comisión">
+          <DatoVerEmision etiqueta="Fecha de salida">{fechaCorta(o.fecha_salida)}</DatoVerEmision>
+          <DatoVerEmision etiqueta="Fecha de retorno">{fechaCorta(o.fecha_retorno)}</DatoVerEmision>
+        </SeccionVerEmision>
+        <SeccionVerEmision numero="05" titulo="Modalidad de viaje">
+          <DatoVerEmision etiqueta="Modalidad">{o.modalidad_viaje || '-'}</DatoVerEmision>
+        </SeccionVerEmision>
+        <SeccionVerEmision numero="06" titulo="Información presupuestal">
+          <DatoVerEmision etiqueta="CCP (certificación)">{f.certificacion_nota || 'Sin certificación'}</DatoVerEmision>
+          <DatoVerEmision etiqueta="Monto de la comisión">{montoPeruEmision(o.monto)}</DatoVerEmision>
+        </SeccionVerEmision>
+        <SeccionVerEmision numero="07" titulo="Control de rendición">
+          <DatoVerEmision etiqueta="Estado de rendición">{et ? et.texto : '-'}</DatoVerEmision>
+          <DatoVerEmision etiqueta="Fecha de vencimiento">
+            {c.vencimiento ? c.vencimiento.toLocaleDateString('es-ES') : '-'}
+          </DatoVerEmision>
+          <DatoVerEmision etiqueta="Fecha de rendición">{f.fecha_rendicion ? fechaCorta(f.fecha_rendicion) : '-'}</DatoVerEmision>
+          <DatoVerEmision etiqueta="Comprobantes">{f.comprobantes_count ?? '-'}</DatoVerEmision>
+        </SeccionVerEmision>
+        <SeccionVerEmision numero="08" titulo="Documentos y formatos asociados">
+          <DatoVerEmision etiqueta="Formato">{o.tiene_formato ? o.numero_documento : 'No emitido'}</DatoVerEmision>
+          <MDTypography variant="caption" color="text" display="block">
+            Los anexos y el formato se abren con los botones de la fila.
+          </MDTypography>
+        </SeccionVerEmision>
+      </>
+    );
+  };
+
   const columnasTabla = [
     {
       Header: 'Item',
       accessor: 'item',
-      width: '5%',
+      width: '4%',
       // eslint-disable-next-line react/prop-types
       Cell: ({ row }) => {
         // eslint-disable-next-line react/prop-types
@@ -5338,7 +5511,6 @@ function EmisionFormatos() {
               // eslint-disable-next-line react/prop-types
               paddingTop: isNewComisionadoGroup(row.index) ? '12px' : '4px',
               // eslint-disable-next-line react/prop-types
-              borderTop: isNewComisionadoGroup(row.index) ? '2px solid #ccc' : 'none',
               // eslint-disable-next-line react/prop-types
               fontWeight: isNewComisionadoGroup(row.index) ? 'bold' : 'normal',
             }}
@@ -5354,246 +5526,292 @@ function EmisionFormatos() {
       accessor: 'numero_documento',
       width: '12%',
       // eslint-disable-next-line react/prop-types
-      Cell: ({ row }) => row.original.numero_documento || '-',
+      Cell: ({ row }) => (
+        <MDTypography variant="button" fontWeight="bold" color="info">
+          {row.original.numero_documento || '-'}
+        </MDTypography>
+      ),
     },
-    { Header: 'Ámbito', accessor: 'ambito_nombre', width: '12%' },
-    { Header: 'Lugar', accessor: 'lugar', width: '15%' },
-    {
-      Header: 'Período',
-      accessor: 'fecha_salida',
-      width: '15%',
-      // eslint-disable-next-line react/prop-types
-      Cell: ({ row }) => {
-        const fechaSalida = row.original.fecha_salida;
-        const fechaRetorno = row.original.fecha_retorno;
-        return `${new Date(fechaSalida).toLocaleDateString('es-ES')} - ${new Date(fechaRetorno).toLocaleDateString('es-ES')}`;
-      },
-    },
-    {
-      Header: 'Vence Rendición',
-      width: '11%',
-      // eslint-disable-next-line react/prop-types
-      Cell: ({ row }) => {
-        const { fecha_retorno, estado_emision } = row.original;
-        if (!fecha_retorno) return '-';
-        if (estado_emision === 'RENDIDO') {
-          const fechaRend = String(row.original.formato_existente?.fecha_rendicion || '').slice(0, 10);
-          if (!fechaRend || !fecha_retorno) {
-            return <span style={{ color: '#2e7d32', fontWeight: 'bold' }}>Rendido</span>;
-          }
-          const [ra, rm, rd] = fechaRend.split('-').map(Number);
-          const rendidoEl = new Date(ra, rm - 1, rd);
-          const vencimiento = calcularVencimientoRendicion(fecha_retorno);
-          const enPlazo = rendidoEl <= vencimiento;
-          return (
-            <span>
-              <span style={{ color: enPlazo ? '#2e7d32' : '#d32f2f', fontWeight: 'bold' }}>{enPlazo ? 'En plazo' : 'Fuera de plazo'}</span>
-              <br />
-              <small>Rendido el {rendidoEl.toLocaleDateString('es-PE')}</small>
-            </span>
-          );
-        }
-        if (estado_emision === 'DEVUELTO') {
-          return <span style={{ color: '#616161', fontWeight: 'bold' }}>Devuelto</span>;
-        }
-        if (!['EMITIDO', 'ENVIADO', 'PAGADO', 'RINDIENDO'].includes(estado_emision)) return '-';
-        const vence = calcularVencimientoRendicion(fecha_retorno);
-        const fechaTexto = `Vence el ${vence.toLocaleDateString('es-PE')}`;
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        if (vence < hoy) {
-          return (
-            <span>
-              <span style={{ color: '#d32f2f', fontWeight: 'bold' }}>Vencido</span>
-              <br />
-              <small>{fechaTexto}</small>
-            </span>
-          );
-        }
-        const diasRestantes = contarDiasHabilesHasta(vence);
-        return (
-          <span>
-            {diasRestantes === 0 ? 'Vence hoy' : `${diasRestantes} días hábiles`}
-            <br />
-            <small>{fechaTexto}</small>
-          </span>
-        );
-      },
-    },
-    { Header: 'Modalidad de Viaje', accessor: 'modalidad_viaje', width: '15%' },
     {
       Header: 'Comisionado',
       accessor: 'usuario_nombre',
-      width: '15%',
-    },
-    {
-      Header: 'CCP (Certificación)',
-      width: '12%',
+      width: '14%',
       // eslint-disable-next-line react/prop-types
-      Cell: ({ row }) => {
-        const certificacionNota = row.original.formato_existente?.certificacion_nota;
-        return certificacionNota ? (
-          <Chip 
-            label={`CCP: ${certificacionNota}`} 
-            color="primary" 
-            variant="outlined"
-            size="small"
-          />
-        ) : (
-          <Chip 
-            label="Sin certificación" 
-            color="warning" 
-            variant="filled"
-            size="small"
-          />
+      Cell: ({ value }) => (
+        <MDTypography variant="button" display="block" sx={{ lineHeight: 1.3 }}>
+          {value || '-'}
+        </MDTypography>
+      ),
+    },
+    { Header: 'Ámbito', accessor: 'ambito_nombre', width: '9%' },
+    {
+      Header: 'Lugar',
+      accessor: 'lugar',
+      width: '14%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row: { original } }) => {
+        const { visibles, extra } = resumirDestinos(original.lugar);
+        return (
+          <MDTypography
+            variant="button"
+            display="block"
+            title={original.lugar || ''}
+            sx={{ lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          >
+            {visibles.join(', ')}
+            {extra > 0 ? ` (+${extra} más)` : ''}
+          </MDTypography>
         );
-      }
+      },
     },
     {
-      Header: 'Monto',
-      accessor: 'monto',
+      Header: 'Período',
+      accessor: 'fecha_salida',
+      width: '10%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row: { original } }) => (
+        <MDBox lineHeight={1.3}>
+          <MDTypography variant="button" display="block">
+            {fechaCorta(original.fecha_salida)}
+          </MDTypography>
+          <MDTypography variant="caption" color="text" display="block">
+            al {fechaCorta(original.fecha_retorno)}
+          </MDTypography>
+        </MDBox>
+      ),
+    },
+    {
+      Header: 'Rendición',
+      width: '13%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row: { original } }) => {
+        const c = clasificarRendicion(original);
+        const et = etiquetaRendicion(c);
+        if (!et) return '-';
+        const lineas = [
+          c.vencimiento ? `Vence el ${c.vencimiento.toLocaleDateString('es-ES')}` : null,
+          c.tipo === 'PENDIENTE' && c.diasRestantes > 0 ? `${c.diasRestantes} días hábiles` : null,
+          c.rendidoEl ? `Rendido el ${c.rendidoEl.toLocaleDateString('es-ES')}` : null,
+        ].filter(Boolean);
+        return (
+          <MDBox lineHeight={1.3}>
+            <MDBadge badgeContent={et.texto} color={et.color} variant="gradient" size="sm" />
+            {lineas.map((t) => (
+              <MDTypography key={t} variant="caption" color="text" display="block">
+                {t}
+              </MDTypography>
+            ))}
+          </MDBox>
+        );
+      },
+    },
+    {
+      Header: 'Presupuesto',
       width: '12%',
       // eslint-disable-next-line react/prop-types
-      Cell: ({ row }) => `S/. ${parseFloat(row.original.monto).toFixed(2)}`,
+      Cell: ({ row: { original } }) => {
+        const nota = original.formato_existente?.certificacion_nota;
+        return (
+          <MDBox lineHeight={1.3}>
+            {nota ? (
+              <MDTypography variant="button" fontWeight="bold" color="info" display="block">
+                {`CCP: ${nota}`}
+              </MDTypography>
+            ) : (
+              <MDTypography variant="caption" color="warning" display="block">
+                Sin certificación
+              </MDTypography>
+            )}
+            <MDTypography variant="button" fontWeight="bold" color="dark" display="block">
+              {montoPeruEmision(original.monto)}
+            </MDTypography>
+          </MDBox>
+        );
+      },
     },
     {
       Header: 'Acciones',
       accessor: 'acciones',
-      width: '25%',
+      width: '12%',
       // eslint-disable-next-line react/prop-types
       Cell: ({ row: { original } }) => {
         // 🆕 Mostrar botones diferente si ya existe formato
         if (original.tiene_formato) {
           return (
-            <MDBox sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            <MDBox sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', '& .anexo-numero': { fontSize: '1.25rem !important', fontWeight: 700, lineHeight: 1 } }}>
+          <Tooltip title="Visualizar">
+            <IconButton size="small" color="info" onClick={() => setFormatoVer(original)} sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}>
+              <InfoOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
               {/* ✏️ Modificar Formato - NO mostrar si estado es RENDIDO */}
               {!['RENDIDO', 'DEVUELTO'].includes(original.estado_emision) && (
-                <MDButton
-                  variant="gradient"
-                  color="warning"
-                  size="small"
-                  onClick={() => handleAbrirModalModificarFormato(original)}
-                  title="Modificar formato existente"
-                >
-                  ✏️ Modificar
-                </MDButton>
+                <Tooltip title="Modificar formato existente">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="info"
+                      onClick={() => handleAbrirModalModificarFormato(original)}
+                      sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               )}
               {!['RENDIDO', 'DEVUELTO'].includes(original.estado_emision) && (
-                <MDButton
-                  variant="outlined"
-                  color="dark"
-                  size="small"
-                  onClick={() => handleAbrirSiafCut(original)}
-                  title="Ingresar o modificar SIAF y CUT"
-                >
-                  🔢 SIAF/CUT
-                </MDButton>
+                <Tooltip title="Ingresar o modificar SIAF y CUT">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="info"
+                      onClick={() => handleAbrirSiafCut(original)}
+                      sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                    >
+                      <TagIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               )}
               {['ENVIADO', 'PAGADO'].includes(original.estado_emision) && (
-                <MDButton
-                  variant="outlined"
-                  color="error"
-                  size="small"
-                  onClick={() => handleDevolucionTotal(original)}
-                  title="Devolver todo el viático con motivo"
-                >
-                  ↩️ Devolución total
-                </MDButton>
+                <Tooltip title="Devolver todo el viático con motivo">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => handleDevolucionTotal(original)}
+                      sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: '#ffcdd2' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                    >
+                      <UndoIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               )}
-              <MDButton
-                variant="outlined"
-                color="info"
-                size="small"
-                onClick={() => verAnexoEnModal('anexo1', original)}
-                title="Ver Anexo 01"
-                disabled={previewLoading}
-              >
-                📄 1
-              </MDButton>
-              <MDButton
-                variant="outlined"
-                color="info"
-                size="small"
-                onClick={() => verAnexoEnModal('anexo2', original)}
-                title="Ver Anexo 02"
-                disabled={previewLoading}
-              >
-                📋 2
-              </MDButton>
+              <Tooltip title="Ver Anexo 01">
+                <span>
+                  <IconButton
+                    size="small"
+                    color="warning"
+                    onClick={() => verAnexoEnModal('anexo1', original)}
+                    disabled={previewLoading}
+                    sx={{ backgroundColor: '#fff3e0', '&:hover': { backgroundColor: '#ffe0b2' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                  >
+                    <span className="anexo-numero">1</span>
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Ver Anexo 02">
+                <span>
+                  <IconButton
+                    size="small"
+                    color="warning"
+                    onClick={() => verAnexoEnModal('anexo2', original)}
+                    disabled={previewLoading}
+                    sx={{ backgroundColor: '#fff3e0', '&:hover': { backgroundColor: '#ffe0b2' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                  >
+                    <span className="anexo-numero">2</span>
+                  </IconButton>
+                </span>
+              </Tooltip>
               {original.estado_emision === 'RENDIDO' && (
-                <MDButton
-                  variant="outlined"
-                  color="success"
-                  size="small"
-                  onClick={() => verAnexoEnModal('anexo3', original)}
-                  title="Ver Anexo 03 - Rendición de Cuentas"
-                  disabled={previewLoading}
-                >
-                  📝 3
-                </MDButton>
+                <Tooltip title="Ver Anexo 03 - Rendición de Cuentas">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="warning"
+                      onClick={() => verAnexoEnModal('anexo3', original)}
+                      disabled={previewLoading}
+                      sx={{ backgroundColor: '#fff3e0', '&:hover': { backgroundColor: '#ffe0b2' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                    >
+                      <span className="anexo-numero">3</span>
+                    </IconButton>
+                  </span>
+                </Tooltip>
               )}
               {original.estado_emision === 'RENDIDO' && (
-                <MDButton
-                  variant="outlined"
-                  color="warning"
-                  size="small"
-                  onClick={() => verAnexoEnModal('anexo4', original)}
-                  title="Ver Anexo 04 - Declaración Jurada"
-                  disabled={previewLoading}
-                >
-                  📋 4
-                </MDButton>
+                <Tooltip title="Ver Anexo 04 - Declaración Jurada">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="warning"
+                      onClick={() => verAnexoEnModal('anexo4', original)}
+                      disabled={previewLoading}
+                      sx={{ backgroundColor: '#fff3e0', '&:hover': { backgroundColor: '#ffe0b2' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                    >
+                      <span className="anexo-numero">4</span>
+                    </IconButton>
+                  </span>
+                </Tooltip>
               )}
               {original.estado_emision === 'RENDIDO' && (
-                <MDButton
-                  variant="outlined"
-                  color="secondary"
-                  size="small"
-                  onClick={() => verAnexoEnModal('anexo5', original)}
-                  title="Ver Anexo 05 - Certificado de Comisión"
-                  disabled={previewLoading}
-                >
-                  📜 5
-                </MDButton>
+                <Tooltip title="Ver Anexo 05 - Certificado de Comisión">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="warning"
+                      onClick={() => verAnexoEnModal('anexo5', original)}
+                      disabled={previewLoading}
+                      sx={{ backgroundColor: '#fff3e0', '&:hover': { backgroundColor: '#ffe0b2' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                    >
+                      <span className="anexo-numero">5</span>
+                    </IconButton>
+                  </span>
+                </Tooltip>
               )}
               {/* 🆕 Botón Rendir/Modificar según estado */}
               {(original.formato_existente?.tipo_emision === 'REEMBOLSO' || String(original.formato_existente?.numero_siaf || '').trim() !== '') && (original.estado_emision === 'ENVIADO' || original.estado_emision === 'PAGADO' || (original.estado_emision === 'RINDIENDO' && !((original.formato_existente && original.formato_existente.comprobantes_count) > 0))) && (
-                <MDButton
-                  variant="gradient"
-                  color="success"
-                  size="small"
-                  onClick={() => handleAbrirModalRendicion(original)}
-                  title={!(original.formato_existente?.tipo_emision !== 'REEMBOLSO') || String(original.formato_existente?.numero_siaf || '').trim() ? 'Rendir comprobantes de gasto' : 'Falta registrar el SIAF para rendir'}
-                  disabled={(original.formato_existente?.tipo_emision !== 'REEMBOLSO') && !String(original.formato_existente?.numero_siaf || '').trim()}
-                >
-                  💵 Rendir
-                </MDButton>
+                <Tooltip title={!(original.formato_existente?.tipo_emision !== 'REEMBOLSO') || String(original.formato_existente?.numero_siaf || '').trim() ? 'Rendir comprobantes de gasto' : 'Falta registrar el SIAF para rendir'}>
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="success"
+                      onClick={() => handleAbrirModalRendicion(original)}
+                      disabled={(original.formato_existente?.tipo_emision !== 'REEMBOLSO') && !String(original.formato_existente?.numero_siaf || '').trim()}
+                      sx={{ backgroundColor: '#e8f5e9', '&:hover': { backgroundColor: '#c8e6c9' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                    >
+                      <PaymentsIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               )}
               {(original.formato_existente?.tipo_emision === 'REEMBOLSO' || String(original.formato_existente?.numero_siaf || '').trim() !== '') && (original.estado_emision === 'RENDIDO' || (original.estado_emision === 'RINDIENDO' && (original.formato_existente && original.formato_existente.comprobantes_count) > 0)) && (
-                <MDButton
-                  variant="gradient"
-                  color="secondary"
-                  size="small"
-                  onClick={() => handleAbrirModalRendicion(original)}
-                  title="Modificar rendición de comprobantes"
-                >
-                  ✏️ Modificar Rendición
-                </MDButton>
+                <Tooltip title="Modificar rendición de comprobantes">
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="info"
+                      onClick={() => handleAbrirModalRendicion(original)}
+                      sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+                    >
+                      <EditNoteIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               )}
             </MDBox>
           );
         }
         
         return (
-          <MDButton
-            variant="gradient"
-            color="info"
-            size="small"
-            onClick={() => handleAbrirModalEmitirFormato(original)}
-            startIcon={<DescriptionIcon />}
-          >
-            📝 Emitir
-          </MDButton>
+          <MDBox display="flex" gap={0.5} justifyContent="center" flexWrap="wrap">
+          <Tooltip title="Visualizar">
+            <IconButton size="small" color="info" onClick={() => setFormatoVer(original)} sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}>
+              <InfoOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Emitir">
+            <span>
+              <IconButton
+                size="small"
+                color="info"
+                onClick={() => handleAbrirModalEmitirFormato(original)}
+                sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}
+              >
+                <DescriptionIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          </MDBox>
         );
       },
     },
@@ -5603,13 +5821,35 @@ function EmisionFormatos() {
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox py={3}>
-        <MDBox mb={3}>
-          <MDTypography variant="h4" mb={1}>
-            Emisión de Formatos de Comisión
-          </MDTypography>
-          <MDTypography variant="body2" color="text">
-            Selecciona una comisión aprobada con presupuesto asignado para emitir su formato.
-          </MDTypography>
+        <Card>
+          <MDBox mx={2} mt={-3} py={3} px={2} variant="gradient" bgColor="info" borderRadius="lg" coloredShadow="info">
+            <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+              Emisión de Formatos de Comisión
+            </MDTypography>
+            <MDTypography variant="button" color="white" opacity={0.8}>
+              Selecciona una comisión aprobada con presupuesto asignado para emitir su formato.
+            </MDTypography>
+          </MDBox>
+
+        <MDBox px={3} pt={2}>
+          <MDBox display="grid" gridTemplateColumns={{ xs: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }} gap={2}>
+            {[
+              { etiqueta: 'Total de comisiones', valor: resumenEmision.total },
+              { etiqueta: 'Pendientes de emisión', valor: resumenEmision.pendientesEmision },
+              { etiqueta: 'En plazo', valor: resumenEmision.enPlazo },
+              { etiqueta: 'Vencidas', valor: resumenEmision.vencidas },
+              { etiqueta: 'Rendidas', valor: resumenEmision.rendidas },
+            ].map((item) => (
+              <MDBox key={item.etiqueta} p={2} sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fff' }}>
+                <MDTypography variant="caption" color="secondary" fontWeight="bold" display="block">
+                  {item.etiqueta}
+                </MDTypography>
+                <MDTypography variant="h6" fontWeight="bold" color="dark">
+                  {item.valor}
+                </MDTypography>
+              </MDBox>
+            ))}
+          </MDBox>
         </MDBox>
 
         {error && <Alert severity="error">{error}</Alert>}
@@ -5619,8 +5859,7 @@ function EmisionFormatos() {
             <CircularProgress />
           </MDBox>
         ) : (
-          <Card>
-            <MDBox p={2}>
+          <MDBox p={2}>
               <DataTable
                 table={{
                   columns: columnasTabla,
@@ -5633,11 +5872,30 @@ function EmisionFormatos() {
                 entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                 showTotalEntries={true}
                 noEndBorder
+                vistaMovil
               />
-            </MDBox>
-          </Card>
+          </MDBox>
         )}
+        </Card>
       </MDBox>
+
+      {/* Drawer de detalle de la comisión */}
+      <Drawer
+        anchor="right"
+        open={Boolean(formatoVer)}
+        onClose={() => setFormatoVer(null)}
+        PaperProps={{ sx: { width: { xs: '100%', sm: 480 } } }}
+      >
+        <MDBox px={3} py={2} display="flex" justifyContent="space-between" alignItems="center" sx={{ backgroundColor: '#1A73E8' }}>
+          <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+            Detalle de la comisión
+          </MDTypography>
+          <IconButton size="small" onClick={() => setFormatoVer(null)} sx={{ color: '#fff' }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </MDBox>
+        <MDBox p={3}>{formatoVer && renderVerFormato(formatoVer)}</MDBox>
+      </Drawer>
 
       {/* Dialog para vista previa */}
       <Dialog 

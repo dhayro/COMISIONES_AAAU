@@ -325,12 +325,16 @@ function GestionProveedor() {
     acciones: (
       <MDBox display="flex" gap={1}>
         <Tooltip title="Editar">
-          <IconButton size="small" color="info" onClick={() => handleOpenDialog(proveedor)}>
+          <IconButton size="small" color="info" onClick={() => handleOpenDialog(proveedor)}
+      sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
+    >
             <EditIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Eliminar">
-          <IconButton size="small" color="error" onClick={() => handleEliminar(proveedor.id)}>
+          <IconButton size="small" color="error" onClick={() => handleEliminar(proveedor.id)}
+      sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: '#ffcdd2' } }}
+    >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -344,7 +348,7 @@ function GestionProveedor() {
     { Header: 'Dirección', accessor: 'direccion', width: '25%' },
     { Header: 'Email', accessor: 'email', width: '18%' },
     { Header: 'Teléfono', accessor: 'telefono', width: '12%' },
-    { Header: 'Acciones', accessor: 'acciones', align: 'center', width: '8%' },
+    { Header: 'Acciones', accessor: 'acciones', disableSortBy: true, align: 'center', width: '8%' },
   ];
 
   return (
@@ -365,9 +369,14 @@ function GestionProveedor() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Proveedores
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Proveedores
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre los proveedores y sus datos de registro.
+              </MDTypography>
+            </MDBox>
             <MDButton
               variant="contained"
               color="info"
@@ -385,10 +394,12 @@ function GestionProveedor() {
             ) : (
               <DataTable
                 table={{ columns, rows }}
-                isSorted={false}
-                entriesPerPage={false}
-                showTotalEntries={false}
+                isSorted={true}
+                canSearch
+                entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
+                showTotalEntries
                 noEndBorder
+                vistaMovil
               />
             )}
           </MDBox>

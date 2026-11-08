@@ -151,6 +151,7 @@ class FormatoEmision {
                a.nombre_corto as ambito_nombre,
                c.lugar as comision_lugar,
                cc.nota as certificacion_nota,
+               cc.monto_certificado as certificacion_monto,
                (SELECT COUNT(*) FROM rendiciones r WHERE r.formato_emision_id = fe.id) as comprobantes_count,
                (SELECT COUNT(*) FROM rendiciones r LEFT JOIN tipo_comprobante tcv ON tcv.id = r.tipo_comprobante_id WHERE r.formato_emision_id = fe.id AND COALESCE(tcv.nombre, '') NOT IN ('DECLARACION JURADA', 'OTROS DOCUMENTOS')) as comprobantes_validables,
                (SELECT COUNT(*) FROM rendiciones r LEFT JOIN tipo_comprobante tcp ON tcp.id = r.tipo_comprobante_id WHERE r.formato_emision_id = fe.id AND COALESCE(tcp.nombre, '') NOT IN ('DECLARACION JURADA', 'OTROS DOCUMENTOS') AND r.estado_rendicion NOT IN ('VALIDADO', 'MANUAL')) as comprobantes_validables_pendientes,

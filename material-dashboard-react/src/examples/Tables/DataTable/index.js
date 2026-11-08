@@ -13,7 +13,7 @@ Coded by www.creative-tim.com
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useMemo, useEffect, useState } from 'react';
+import { Fragment, useMemo, useEffect, useState } from 'react';
 
 // prop-types is a library for typechecking of props
 import PropTypes from 'prop-types';
@@ -26,6 +26,8 @@ import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableContainer from '@mui/material/TableContainer';
 import TableRow from '@mui/material/TableRow';
+import TableCell from '@mui/material/TableCell';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import Icon from '@mui/material/Icon';
 import Autocomplete from '@mui/material/Autocomplete';
 
@@ -39,6 +41,10 @@ import MDPagination from 'components/MDPagination';
 import DataTableHeadCell from 'examples/Tables/DataTable/DataTableHeadCell';
 import DataTableBodyCell from 'examples/Tables/DataTable/DataTableBodyCell';
 
+// Columna de acciones: se centra aunque su campo no se llame "acciones"
+const alineacionAcciones = (column) =>
+  column.accessor === 'acciones' || column.id === 'acciones' || column.Header === 'Acciones' ? 'center' : 'left';
+
 function DataTable({
   entriesPerPage,
   canSearch,
@@ -47,6 +53,9 @@ function DataTable({
   pagination,
   isSorted,
   noEndBorder,
+  renderDetalle,
+  detalleAbiertoIds = [],
+  vistaMovil = false,
 }) {
   const defaultValue = entriesPerPage.defaultValue ? entriesPerPage.defaultValue : 10;
   const entries = entriesPerPage.entries
@@ -54,6 +63,8 @@ function DataTable({
     : ['5', '10', '15', '20', '25'];
   const columns = useMemo(() => table.columns, [table]);
   const data = useMemo(() => table.rows, [table]);
+  const esMovil = useMediaQuery('(max-width:768px)');
+  const usarTarjetas = vistaMovil && esMovil;
 
   const tableInstance = useTable(
     { columns, data, initialState: { pageIndex: 0 } },
@@ -146,7 +157,17 @@ function DataTable({
   }
 
   return (
-    <TableContainer sx={{ boxShadow: 'none' }}>
+    <TableContainer
+      sx={{
+        boxShadow: 'none',
+        '& th, & th *': { color: '#000 !important', fontSize: '0.875rem !important' },
+        '& th, & th > *': { textAlign: 'center !important', justifyContent: 'center !important' },
+        '& td, & td div, & td span, & td p, & td small': { fontSize: '0.875rem !important' },
+        '& td > div': { width: '100% !important', wordBreak: 'break-word' },
+        '& .MuiInputBase-input': { fontSize: '0.875rem !important' },
+        '& .MuiTypography-caption': { fontSize: '0.875rem !important' },
+      }}
+    >
       {entriesPerPage || canSearch ? (
         <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>
           {entriesPerPage && (
@@ -183,6 +204,41 @@ function DataTable({
           )}
         </MDBox>
       ) : null}
+      {usarTarjetas ? (
+        <MDBox>
+          {page.map((row) => {
+            prepareRow(row);
+            const abierto = renderDetalle && detalleAbiertoIds.includes(row.original.id);
+            return (
+              <MDBox
+                key={row.id}
+                sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fff', p: 2, mb: 2 }}
+              >
+                {row.cells.map((cell) => (
+                  <MDBox
+                    key={cell.column.id}
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="flex-start"
+                    gap={1}
+                    py={0.5}
+                  >
+                    <MDTypography variant="caption" fontWeight="bold" color="secondary">
+                      {typeof cell.column.Header === 'string' ? cell.column.Header : ''}
+                    </MDTypography>
+                    <MDBox sx={{ textAlign: 'right', fontSize: '0.875rem', minWidth: 0 }}>{cell.render('Cell')}</MDBox>
+                  </MDBox>
+                ))}
+                {abierto && (
+                  <MDBox mt={1} pt={1} sx={{ borderTop: '1px solid #e8eaed' }}>
+                    {renderDetalle(row.original)}
+                  </MDBox>
+                )}
+              </MDBox>
+            );
+          })}
+        </MDBox>
+      ) : (
       <Table {...getTableProps()}>
         <MDBox component="thead">
           {headerGroups.map((headerGroup, key) => (
@@ -192,7 +248,7 @@ function DataTable({
                   key={idx}
                   {...column.getHeaderProps(isSorted && column.getSortByToggleProps())}
                   width={column.width ? column.width : 'auto'}
-                  align={column.align ? column.align : 'left'}
+                  align={column.align ? column.align : alineacionAcciones(column)}
                   sorted={setSortedValue(column)}
                 >
                   {column.render('Header')}
@@ -205,22 +261,33 @@ function DataTable({
           {page.map((row, key) => {
             prepareRow(row);
             return (
-              <TableRow key={key} {...row.getRowProps()}>
+              <Fragment key={key}>
+              <TableRow {...row.getRowProps()}>
                 {row.cells.map((cell, idx) => (
                   <DataTableBodyCell
                     key={idx}
                     noBorder={noEndBorder && rows.length - 1 === key}
-                    align={cell.column.align ? cell.column.align : 'left'}
+                    nowrap={cell.column.nowrap}
+                    align={cell.column.align ? cell.column.align : alineacionAcciones(cell.column)}
                     {...cell.getCellProps()}
                   >
                     {cell.render('Cell')}
                   </DataTableBodyCell>
                 ))}
               </TableRow>
+              {renderDetalle && detalleAbiertoIds.includes(row.original.id) && (
+                <TableRow>
+                  <TableCell colSpan={row.cells.length} sx={{ backgroundColor: '#fafafa', py: 2 }}>
+                    {renderDetalle(row.original)}
+                  </TableCell>
+                </TableRow>
+              )}
+              </Fragment>
             );
           })}
         </TableBody>
       </Table>
+      )}
 
       <MDBox
         display="flex"

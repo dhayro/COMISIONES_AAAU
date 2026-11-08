@@ -291,12 +291,12 @@ function GestionCorrelativos() {
       <DashboardNavbar />
       <MDBox pt={3} px={2} pb={2}>
         <Card>
-          <MDBox p={3} display="flex" justifyContent="space-between" alignItems="center">
+          <MDBox mx={2} mt={-3} py={3} px={2} variant="gradient" bgColor="info" borderRadius="lg" coloredShadow="info" display="flex" justifyContent="space-between" alignItems="center">
             <MDBox>
-              <MDTypography variant="h5" fontWeight="bold" mb={1}>
-                🔢 Gestión de Controles de Correlativo
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Controles de Correlativo
               </MDTypography>
-              <MDTypography variant="body2" color="textSecondary">
+              <MDTypography variant="button" color="white" opacity={0.8}>
                 Configura el número inicial de correlativo por usuario y año
               </MDTypography>
             </MDBox>
@@ -333,20 +333,21 @@ function GestionCorrelativos() {
               <DataTable
                 table={{
                   columns: [
-                    { Header: 'ID', accessor: 'id', width: '8%' },
+                    { Header: 'Item', accessor: 'item', disableSortBy: true, width: '5%', Cell: ({ row }) => row.index + 1 },
                     {
                       Header: 'Usuario',
                       accessor: (row) => usuarioNombre(row.usuario_id),
-                      width: '22%',
+                      width: '20%',
                     },
                     { Header: 'Año', accessor: 'ano', width: '10%' },
-                    { Header: 'Número Inicial', accessor: 'numero_inicial', width: '14%' },
-                    { Header: 'Próximo Número', accessor: 'numero_proximo', width: '14%' },
-                    { Header: 'Prefijo', accessor: 'prefijo', width: '14%' },
-                    { Header: 'Descripción', accessor: 'descripcion', width: '18%' },
+                    { Header: 'Número Inicial', accessor: 'numero_inicial', width: '12%' },
+                    { Header: 'Próximo Número', accessor: 'numero_proximo', width: '12%' },
+                    { Header: 'Prefijo', accessor: 'prefijo', width: '12%' },
+                    { Header: 'Descripción', accessor: 'descripcion', width: '15%' },
                     {
                       Header: 'Acciones',
                       accessor: 'acciones',
+                      disableSortBy: true,
                       width: '14%',
                       disableSortBy: true,
                       // eslint-disable-next-line react/prop-types
@@ -355,8 +356,9 @@ function GestionCorrelativos() {
                           <Tooltip title="Editar">
                             <IconButton
                               size="small"
-                              color="primary"
+                              color="info"
                               onClick={() => handleOpenDialog(row.original)}
+                              sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
@@ -366,6 +368,7 @@ function GestionCorrelativos() {
                               size="small"
                               color="error"
                               onClick={() => handleEliminar(row.original.id)}
+                              sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: '#ffcdd2' } }}
                             >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
@@ -377,10 +380,11 @@ function GestionCorrelativos() {
                   rows: tableData,
                 }}
                 canSearch
-                isSorted={false}
+                isSorted={true}
                 entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                 showTotalEntries
                 noEndBorder
+                vistaMovil
               />
             )}
           </MDBox>

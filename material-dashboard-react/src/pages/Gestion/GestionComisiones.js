@@ -22,6 +22,9 @@ import {
   MenuItem,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloseIcon from '@mui/icons-material/Close';
+import Drawer from '@mui/material/Drawer';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import AddIcon from '@mui/icons-material/Add';
@@ -35,6 +38,7 @@ import MDBadge from 'components/MDBadge';
 import DashboardLayout from 'examples/LayoutContainers/DashboardLayout';
 import DashboardNavbar from 'examples/Navbars/DashboardNavbar';
 import Footer from 'examples/Footer';
+import 'styles/tablas-responsive.css';
 import DataTable from 'examples/Tables/DataTable';
 import api from 'services/api';
 import { useAuth } from 'context/AuthContext'; // 🆕 Importar useAuth
@@ -52,7 +56,96 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(styleElement);
 }
 
+// Bloques de la vista de detalle: sección con título y tarjeta suave, y un dato con etiqueta
+const SeccionDetalle = ({ titulo, children }) => (
+  <MDBox mb={2.5}>
+    <MDTypography
+      variant="caption"
+      fontWeight="bold"
+      color="info"
+      sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
+    >
+      {titulo}
+    </MDTypography>
+    <MDBox mt={0.5} p={2} sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fafbfc' }}>
+      {children}
+    </MDBox>
+  </MDBox>
+);
+
+const Dato = ({ etiqueta, children }) => (
+  <MDBox mb={1}>
+    <MDTypography variant="caption" fontWeight="bold" color="secondary" display="block">
+      {etiqueta}
+    </MDTypography>
+    <MDTypography variant="button" display="block" sx={{ whiteSpace: 'pre-wrap' }}>
+      {children}
+    </MDTypography>
+  </MDBox>
+);
+
+// Resume la lista de lugares: muestra los dos primeros y cuántos más hay (el texto completo queda en el tooltip)
+const resumirLugares = (texto = '') => {
+  const partes = String(texto)
+    .split(/,\s*|\s+Y\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return { visibles: partes.slice(0, 2), extra: Math.max(partes.length - 2, 0) };
+};
+
+const formatearMonto = (valor) =>
+  Number(valor || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function GestionComisiones() {
+  // Comisión cuyo detalle se muestra en el panel lateral
+  const [comisionDetalle, setComisionDetalle] = useState(null);
+
+  // Información completa de una comisión, organizada por secciones
+  const renderDetalleComision = (c) => {
+    const lugares = String(c.lugar || '')
+      .split(/,\s*|\s+Y\s+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const fecha = (f) => (f ? parsearFechaLocal(f).toLocaleDateString('es-ES') : '-');
+    return (
+      <>
+        <SeccionDetalle titulo="Información general">
+          <Dato etiqueta="Ámbito">{c.ambito_nombre || '-'}</Dato>
+          <Dato etiqueta="Modalidad">{c.modalidad_viaje || '-'}</Dato>
+          <Dato etiqueta="Periodo">{`${fecha(c.fecha_salida)} – ${fecha(c.fecha_retorno)}`}</Dato>
+          <Dato etiqueta="Días">{c.num_dias ?? '-'}</Dato>
+        </SeccionDetalle>
+        <SeccionDetalle titulo="Lugares de la comisión">
+          {lugares.length ? (
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {lugares.map((lugar, i) => (
+                <li key={i}>
+                  <MDTypography variant="button">{lugar}</MDTypography>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <MDTypography variant="button">-</MDTypography>
+          )}
+        </SeccionDetalle>
+        <SeccionDetalle titulo="Costos">
+          <Dato etiqueta="Costo por día">{formatearMonto(c.costo_xdia)}</Dato>
+          <Dato etiqueta="Costo total">{formatearMonto(c.costo_total_comision)}</Dato>
+        </SeccionDetalle>
+        <SeccionDetalle titulo="Aprobación">
+          <Dato etiqueta="Estado">{c.aprobacion_estado || 'PENDIENTE_APROBACION'}</Dato>
+          <Dato etiqueta="Observación de aprobación">{c.observacion_aprobacion || '-'}</Dato>
+        </SeccionDetalle>
+        <SeccionDetalle titulo="Observación">
+          <Dato etiqueta="Observación">{c.observacion || '-'}</Dato>
+        </SeccionDetalle>
+        <SeccionDetalle titulo="Presupuesto">
+          <Dato etiqueta="Estado presupuestal">{c.presupuesto_estado || '-'}</Dato>
+        </SeccionDetalle>
+      </>
+    );
+  };
+
   const { usuario: usuarioLogueado } = useAuth(); // 🆕 Obtener usuario del contexto
   const [items, setItems] = useState([]);
   const [ambitos, setAmbitos] = useState([]);
@@ -1093,9 +1186,14 @@ function GestionComisiones() {
             justifyContent="space-between"
             alignItems="center"
           >
-            <MDTypography variant="h6" color="white">
-              Gestión de Comisiones
-            </MDTypography>
+            <MDBox>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                Gestión de Comisiones
+              </MDTypography>
+              <MDTypography variant="button" color="white" opacity={0.8}>
+                Administre las comisiones de servicio, sus formatos y asignaciones.
+              </MDTypography>
+            </MDBox>
             <MDBox display="flex" gap={1}>
               {comisionesSeleccionadas.length > 0 && (
                 <MDButton
@@ -1129,7 +1227,7 @@ function GestionComisiones() {
                 {success}
               </Alert>
             )}
-            <MDBox>
+            <MDBox className="tabla-responsive">
               {!loading && (
                 <DataTable
                   table={{
@@ -1198,58 +1296,66 @@ function GestionComisiones() {
                       {
                         Header: 'Item',
                         accessor: 'item',
-                        width: '5%',
+                        nowrap: true, width: '4%',
                         // eslint-disable-next-line react/prop-types,react/display-name
                         Cell: ({ row }) => {
                           // eslint-disable-next-line react/prop-types
                           return row.index + 1;
                         },
                       },
-                      { Header: 'Ámbito', accessor: 'ambito_nombre', width: '12%' },
-                      { Header: 'Lugar', accessor: 'lugar', width: '12%' },
-                      { Header: 'Modalidad', accessor: 'modalidad_viaje', width: '11%' },
+                      { Header: 'Ámbito', accessor: 'ambito_nombre', width: '8%' },
                       {
-                        Header: 'Fecha Salida',
-                        accessor: 'fecha_salida',
-                        width: '11%',
-                        // eslint-disable-next-line react/prop-types
-                        Cell: ({ row }) => {
-                          // eslint-disable-next-line react/prop-types
-                          const fecha = row.original.fecha_salida;
-                          return fecha ? parsearFechaLocal(fecha).toLocaleDateString('es-ES') : '-';
-                        },
-                      },
-                      {
-                        Header: 'Fecha Retorno',
-                        accessor: 'fecha_retorno',
-                        width: '11%',
-                        // eslint-disable-next-line react/prop-types
-                        Cell: ({ row }) => {
-                          // eslint-disable-next-line react/prop-types
-                          const fecha = row.original.fecha_retorno;
-                          return fecha ? parsearFechaLocal(fecha).toLocaleDateString('es-ES') : '-';
-                        },
-                      },
-                      { Header: 'Días', accessor: 'num_dias', width: '7%' },
-                      { Header: 'Costo/Día', accessor: 'costo_xdia', width: '11%' },
-                      {
-                        Header: 'Costo Total',
-                        accessor: 'costo_total_comision',
-                        width: '11%',
+                        Header: 'Lugar',
+                        accessor: 'lugar',
+                        width: '14%',
                         // eslint-disable-next-line react/prop-types,react/display-name
-                        Cell: ({ row }) => {
+                        Cell: ({ row: { original } }) => {
                           // eslint-disable-next-line react/prop-types
-                          const costo = parseFloat(row.original.costo_total_comision || 0);
-                          return costo.toLocaleString('es-ES', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          });
+                          const { visibles, extra } = resumirLugares(original.lugar);
+                          return (
+                            <span title={original.lugar || ''}>
+                              {visibles.join(', ')}
+                              {extra > 0 ? ` (+${extra} más)` : ''}
+                            </span>
+                          );
                         },
+                      },
+                      { Header: 'Modalidad', accessor: 'modalidad_viaje', width: '9%' },
+                      {
+                        Header: 'Periodo',
+                        accessor: 'fecha_salida',
+                        nowrap: true, width: '12%',
+                        // eslint-disable-next-line react/prop-types,react/display-name
+                        Cell: ({ row: { original } }) => {
+                          // eslint-disable-next-line react/prop-types
+                          const salida = original.fecha_salida ? parsearFechaLocal(original.fecha_salida).toLocaleDateString('es-ES') : '-';
+                          // eslint-disable-next-line react/prop-types
+                          const retorno = original.fecha_retorno ? parsearFechaLocal(original.fecha_retorno).toLocaleDateString('es-ES') : '-';
+                          return (
+                            <MDTypography variant="button" display="block" lineHeight={1.3}>
+                              {salida}
+                              <br />
+                              {retorno}
+                            </MDTypography>
+                          );
+                        },
+                      },
+                      { Header: 'Días', accessor: 'num_dias', nowrap: true, width: '5%' },
+                      {
+                        Header: 'Costo total',
+                        accessor: 'costo_total_comision',
+                        nowrap: true, width: '10%',
+                        // eslint-disable-next-line react/prop-types,react/display-name
+                        Cell: ({ row: { original } }) => (
+                          <MDTypography variant="button" fontWeight="bold" color="dark">
+                            {formatearMonto(original.costo_total_comision)}
+                          </MDTypography>
+                        ),
                       },
                       {
                         Header: 'Estado Aprobación',
                         accessor: 'aprobacion_estado',
-                        width: '12%',
+                        width: '10%',
                         // eslint-disable-next-line react/prop-types,react/display-name
                         Cell: ({ row: { original } }) => {
                           const estado = original.aprobacion_estado || 'PENDIENTE_APROBACION';
@@ -1313,186 +1419,121 @@ function GestionComisiones() {
                         },
                       },
                       {
-                        Header: 'Observación Aprobación',
-                        accessor: 'observacion_aprobacion',
-                        width: '12%',
+                        Header: 'Observación',
+                        accessor: 'observacion',
+                        width: '10%',
                         // eslint-disable-next-line react/prop-types,react/display-name
-                        Cell: ({ row: { original } }) => {
-                          const obs = original.observacion_aprobacion || '-';
-                          return (
-                            <MDTypography
-                              variant="caption"
-                              sx={{
-                                maxWidth: '200px',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                display: 'block',
-                              }}
-                              title={obs !== '-' ? obs : ''}
-                            >
-                              {obs}
-                            </MDTypography>
-                          );
-                        },
-                      },
-                      {
-                        Header: 'Presupuesto',
-                        accessor: 'presupuesto_estado',
-                        width: '14%',
-                        // eslint-disable-next-line react/prop-types,react/display-name
-                        // eslint-disable-next-line react/prop-types
-                        Cell: ({ row: { original } }) => {
-                          // eslint-disable-next-line react/prop-types
-                          const estado = original.presupuesto_estado || 'PRESUPUESTO POR ASIGNAR';
-                          // eslint-disable-next-line react/prop-types
-                          // eslint-disable-next-line react/prop-types
-                          const aprobacionEstado =
-                            original.aprobacion_estado || 'PENDIENTE_APROBACION';
-                          let badgeColor = 'warning';
-                          if (estado === 'PRESUPUESTO ASIGNADO') badgeColor = 'success';
-                          return (
-                            <MDBox display="flex" gap={0.5} alignItems="center">
-                              <MDBadge
-                                badgeContent={estado}
-                                color={badgeColor}
-                                variant="contained"
-                              />
-                              {/* eslint-disable-next-line react/prop-types */}
-                              {estado === 'PRESUPUESTO POR ASIGNAR' && (
-                                <Tooltip
-                                  title={
-                                    aprobacionEstado === 'APROBADA'
-                                      ? 'Asignar Presupuesto'
-                                      : 'Debes aprobar primero'
-                                  }
-                                >
-                                  <IconButton
-                                    size="small"
-                                    color="success"
-                                    disabled={aprobacionEstado !== 'APROBADA'}
-                                    onClick={() => handleAbrirPresupuesto(original)}
-                                    sx={{
-                                      backgroundColor:
-                                        aprobacionEstado === 'APROBADA' ? '#e8f5e9' : '#f5f5f5',
-                                      '&:hover': {
-                                        backgroundColor:
-                                          aprobacionEstado === 'APROBADA' ? '#c8e6c9' : '#f5f5f5',
-                                      },
-                                    }}
-                                  >
-                                    <CheckCircleIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                              {estado === 'PRESUPUESTO ASIGNADO' && (
-                                <>
-                                  <Tooltip title="Editar Presupuesto">
-                                    <IconButton
-                                      size="small"
-                                      color="info"
-                                      onClick={() => handleAbrirPresupuesto(original)}
-                                      sx={{
-                                        backgroundColor: '#e3f2fd',
-                                        '&:hover': { backgroundColor: '#bbdefb' },
-                                      }}
-                                    >
-                                      <EditIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Anular Asignación">
-                                    <IconButton
-                                      size="small"
-                                      color="warning"
-                                      // eslint-disable-next-line react/prop-types
-                                      onClick={() => handleAnularPresupuesto(original.id)}
-                                      sx={{
-                                        backgroundColor: '#fff3e0',
-                                        '&:hover': { backgroundColor: '#ffe0b2' },
-                                      }}
-                                    >
-                                      <CancelIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                </>
-                              )}
-                            </MDBox>
-                          );
-                        },
+                        Cell: ({ row: { original } }) => (
+                          <MDTypography
+                            variant="caption"
+                            title={original.observacion || ''}
+                            sx={{ display: 'block', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          >
+                            {original.observacion || '-'}
+                          </MDTypography>
+                        ),
                       },
                       {
                         Header: 'Acciones',
                         accessor: 'acciones',
-                        width: '11%',
+                        nowrap: true, width: '14%',
                         // eslint-disable-next-line react/prop-types,react/display-name
                         Cell: ({ row: { original } }) => {
                           // eslint-disable-next-line react/prop-types
                           const presupuestoEstado = original.presupuesto_estado || '';
                           const estaAsignado = presupuestoEstado === 'PRESUPUESTO ASIGNADO';
+                          // eslint-disable-next-line react/prop-types
+                          const aprobacionEstado = original.aprobacion_estado || 'PENDIENTE_APROBACION';
                           return (
-                            <MDBox display="flex" justifyContent="flex-end" gap={0.5}>
+                            <MDBox display="flex" justifyContent="center" flexWrap="wrap" gap={0.5}>
+                              <Tooltip title="Ver detalle">
+                                <IconButton
+                                  size="small"
+                                  color="info"
+                                  onClick={() => setComisionDetalle(original)}
+                                  sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
+                                >
+                                  <InfoOutlinedIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
                               <Tooltip title="Ver comisionados">
                                 <IconButton
                                   size="small"
-                                  color="primary"
+                                  color="info"
                                   onClick={() => handleOpenDetalle(original)}
-                                  sx={{
-                                    backgroundColor: '#e8f5e9',
-                                    '&:hover': { backgroundColor: '#c8e6c9' },
-                                  }}
+                                  sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
                                 >
                                   <VisibilityIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
-                              <Tooltip
-                                title={
-                                  estaAsignado
-                                    ? 'No se puede editar: presupuesto asignado'
-                                    : 'Editar'
-                                }
-                              >
+                              <Tooltip title={estaAsignado ? 'No se puede editar: presupuesto asignado' : 'Editar'}>
                                 <span>
                                   <IconButton
                                     size="small"
                                     color="info"
                                     onClick={() => handleOpenDialog(original)}
                                     disabled={estaAsignado}
-                                    sx={{
-                                      backgroundColor: '#e3f2fd',
-                                      '&:hover': {
-                                        backgroundColor: estaAsignado ? '#e3f2fd' : '#bbdefb',
-                                      },
-                                    }}
+                                    sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: estaAsignado ? '#e3f2fd' : '#bbdefb' } }}
                                   >
                                     <EditIcon fontSize="small" />
                                   </IconButton>
                                 </span>
                               </Tooltip>
-                              <Tooltip
-                                title={
-                                  estaAsignado
-                                    ? 'No se puede eliminar: presupuesto asignado'
-                                    : 'Eliminar'
-                                }
-                              >
+                              <Tooltip title={estaAsignado ? 'No se puede eliminar: presupuesto asignado' : 'Eliminar'}>
                                 <span>
                                   <IconButton
                                     size="small"
                                     color="error"
-                                    // eslint-disable-next-line react/prop-types
                                     onClick={() => handleEliminar(original.id)}
                                     disabled={estaAsignado}
-                                    sx={{
-                                      backgroundColor: '#ffebee',
-                                      '&:hover': {
-                                        backgroundColor: estaAsignado ? '#ffebee' : '#ffcdd2',
-                                      },
-                                    }}
+                                    sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: estaAsignado ? '#ffebee' : '#ffcdd2' } }}
                                   >
                                     <DeleteIcon fontSize="small" />
                                   </IconButton>
                                 </span>
                               </Tooltip>
+                              {!estaAsignado && (
+                                <Tooltip title={aprobacionEstado === 'APROBADA' ? 'Asignar Presupuesto' : 'Debes aprobar primero'}>
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      color="warning"
+                                      disabled={aprobacionEstado !== 'APROBADA'}
+                                      onClick={() => handleAbrirPresupuesto(original)}
+                                      sx={{
+                                        backgroundColor: aprobacionEstado === 'APROBADA' ? '#fff3e0' : '#f5f5f5',
+                                        '&:hover': { backgroundColor: aprobacionEstado === 'APROBADA' ? '#ffe0b2' : '#f5f5f5' },
+                                      }}
+                                    >
+                                      <CheckCircleIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              )}
+                              {estaAsignado && (
+                                <Tooltip title="Editar Presupuesto">
+                                  <IconButton
+                                    size="small"
+                                    color="info"
+                                    onClick={() => handleAbrirPresupuesto(original)}
+                                    sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              {estaAsignado && (
+                                <Tooltip title="Anular Asignación">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleAnularPresupuesto(original.id)}
+                                    sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: '#ffcdd2' } }}
+                                  >
+                                    <CancelIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                             </MDBox>
                           );
                         },
@@ -1505,9 +1546,33 @@ function GestionComisiones() {
                   entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                   showTotalEntries
                   noEndBorder
-                />
+                  vistaMovil
+                  />
               )}
               {loading && <CircularProgress />}
+              <Drawer
+                anchor="right"
+                open={Boolean(comisionDetalle)}
+                onClose={() => setComisionDetalle(null)}
+                PaperProps={{ sx: { width: { xs: '100%', sm: 440 } } }}
+              >
+                <MDBox
+                  px={3}
+                  py={2}
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ backgroundColor: '#1A73E8' }}
+                >
+                  <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+                    Detalle de la comisión
+                  </MDTypography>
+                  <IconButton size="small" onClick={() => setComisionDetalle(null)} sx={{ color: '#fff' }}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </MDBox>
+                <MDBox p={3}>{comisionDetalle && renderDetalleComision(comisionDetalle)}</MDBox>
+              </Drawer>
             </MDBox>
           </MDBox>
         </Card>

@@ -29,7 +29,13 @@ import AddCircleIcon from '@mui/icons-material/AddCircle';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ListAltIcon from '@mui/icons-material/ListAlt';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloseIcon from '@mui/icons-material/Close';
+import Drawer from '@mui/material/Drawer';
+import LinearProgress from '@mui/material/LinearProgress';
 import Swal from 'sweetalert2';
+import InputAdornment from '@mui/material/InputAdornment';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import MDBox from 'components/MDBox';
 import MDButton from 'components/MDButton';
 import MDBadge from 'components/MDBadge';
@@ -40,6 +46,38 @@ import Footer from 'examples/Footer';
 import DataTable from 'examples/Tables/DataTable';
 import PdfUploadDialog from 'components/PdfUploadDialog';
 import api, { API_BASE_URL } from 'services/api';
+
+// Formato monetario peruano (sin prefijo de moneda)
+const montoPeru = (valor) =>
+  Number(valor || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Color semántico del estado de la certificación
+const colorEstadoCertificacion = (estado) => {
+  const colores = { PENDIENTE: 'warning', APROBADO: 'success', RECHAZADO: 'error' };
+  return colores[estado] || 'light';
+};
+
+// Sección del Drawer: número, título y tarjeta suave
+const SeccionVer = ({ numero, titulo, children }) => (
+  <MDBox mb={2.5}>
+    <MDTypography variant="caption" fontWeight="bold" color="info" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      {numero} · {titulo}
+    </MDTypography>
+    <MDBox mt={0.5} p={2} sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fafbfc' }}>
+      {children}
+    </MDBox>
+  </MDBox>
+);
+
+// Dato con etiqueta; el valor va en MDBox para poder contener insignias
+const DatoVer = ({ etiqueta, children }) => (
+  <MDBox mb={1}>
+    <MDTypography variant="caption" fontWeight="bold" color="secondary" display="block">
+      {etiqueta}
+    </MDTypography>
+    <MDBox sx={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>{children}</MDBox>
+  </MDBox>
+);
 
 function GestionCertificacionesCredito() {
   const [certificaciones, setCertificaciones] = useState([]);
@@ -60,6 +98,7 @@ function GestionCertificacionesCredito() {
   const [pdfRutaActual, setPdfRutaActual] = useState(null);  // 🆕 Ruta del PDF actual
   const [pdfNombreActual, setPdfNombreActual] = useState(null);  // 🆕 Nombre del PDF actual
   const [pdfUrlSegura, setPdfUrlSegura] = useState(null);
+  const [certificacionVer, setCertificacionVer] = useState(null);
   const [openFormatosDialog, setOpenFormatosDialog] = useState(false);
   const [formatosCertificacion, setFormatosCertificacion] = useState([]);
   const [formatosNumeroCertificacion, setFormatosNumeroCertificacion] = useState('');
@@ -613,7 +652,7 @@ function GestionCertificacionesCredito() {
       accessor: 'estado_emision',
       width: '12%',
       Cell: ({ value }) => (
-        <MDBadge badgeContent={value} color={colorEstadoFormato(value)} variant="gradient" size="sm" container />
+        <MDBadge badgeContent={value} color={colorEstadoFormato(value)} variant="gradient" size="sm" />
       ),
     },
     {
@@ -626,7 +665,6 @@ function GestionCertificacionesCredito() {
           color={value ? 'success' : 'light'}
           variant="gradient"
           size="sm"
-          container
         />
       ),
     },
@@ -911,7 +949,17 @@ function GestionCertificacionesCredito() {
   const AccionesCell = (cellProps) => {
     const data = cellProps.row.original;
     return (
-      <MDBox display="flex" gap={1}>
+      <MDBox display="flex" gap={1} flexWrap="wrap">
+        <Tooltip title="Visualizar">
+          <IconButton
+            size="small"
+            onClick={() => setCertificacionVer(data)}
+            color="info"
+            sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}
+          >
+            <InfoOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Editar">
           <IconButton
             size="small"
@@ -1070,37 +1118,135 @@ function GestionCertificacionesCredito() {
     return <span style={{ color, fontWeight: '600' }}>S/. {montoFormateado}</span>;
   };
 
+  // Totales sobre la lista completa de certificaciones (no solo la página visible)
+  const totalCertificado = certificaciones.reduce((suma, c) => suma + parseFloat(c.monto_certificado || 0), 0);
+  const totalUtilizado = certificaciones.reduce((suma, c) => suma + parseFloat(c.monto_utilizado || 0), 0);
+
+  // Contenido del Drawer de visualización: todos los datos de la certificación, por secciones
+  const renderVerCertificacion = (c) => {
+    const certificado = parseFloat(c.monto_certificado || 0);
+    const utilizado = parseFloat(c.monto_utilizado || 0);
+    const saldo = certificado - utilizado;
+    const pctUtilizado = certificado > 0 ? (utilizado / certificado) * 100 : 0;
+    const pctDisponible = certificado > 0 ? (saldo / certificado) * 100 : 0;
+    return (
+      <>
+        <SeccionVer numero="01" titulo="Información general">
+          <DatoVer etiqueta="Nota">{c.nota || '-'}</DatoVer>
+          <DatoVer etiqueta="Mes">{c.mes || '-'}</DatoVer>
+          <DatoVer etiqueta="Justificación">{c.justificacion || '-'}</DatoVer>
+        </SeccionVer>
+        <SeccionVer numero="02" titulo="Identificación documental">
+          <DatoVer etiqueta="N° de documento">{c.numero_documento || '-'}</DatoVer>
+          <DatoVer etiqueta="Tipo de documento">{c.tipo_documento || '-'}</DatoVer>
+          <DatoVer etiqueta="Fecha del documento">{formatearFecha(c.fecha_documento)}</DatoVer>
+          <DatoVer etiqueta="Fecha de aprobación">{formatearFecha(c.fecha_aprobacion)}</DatoVer>
+        </SeccionVer>
+        <SeccionVer numero="03" titulo="Información presupuestal">
+          <DatoVer etiqueta="Meta">{c.numero_meta || '-'}</DatoVer>
+          <DatoVer etiqueta="Ámbito">{c.ambito_nombre_corto || '-'}</DatoVer>
+          <DatoVer etiqueta="Fuente de financiamiento">{c.fuente_financiamiento_abreviatura || '-'}</DatoVer>
+          <DatoVer etiqueta="Monto certificado">{montoPeru(certificado)}</DatoVer>
+        </SeccionVer>
+        <SeccionVer numero="04" titulo="Ejecución y utilización">
+          <MDBox display="grid" gridTemplateColumns={{ xs: '1fr', sm: 'repeat(3, 1fr)' }} gap={1.5} mb={2}>
+            <DatoVer etiqueta="Certificado">{montoPeru(certificado)}</DatoVer>
+            <DatoVer etiqueta="Utilizado">{montoPeru(utilizado)}</DatoVer>
+            <DatoVer etiqueta="Saldo disponible">{montoPeru(saldo)}</DatoVer>
+          </MDBox>
+          <MDTypography variant="caption" fontWeight="bold" color="secondary" display="block">
+            Utilizado: {pctUtilizado.toFixed(1)}% · Disponible: {pctDisponible.toFixed(1)}%
+          </MDTypography>
+          <LinearProgress
+            variant="determinate"
+            value={Math.min(pctUtilizado, 100)}
+            sx={{ mt: 1, height: 8, borderRadius: 4 }}
+          />
+          {utilizado > certificado && (
+            <MDTypography variant="caption" color="error" display="block" mt={1}>
+              La utilización supera el monto certificado.
+            </MDTypography>
+          )}
+        </SeccionVer>
+        <SeccionVer numero="05" titulo="Estado de certificación">
+          <DatoVer etiqueta="Estado">
+            <MDBadge
+              badgeContent={c.estado_certificacion || '-'}
+              color={colorEstadoCertificacion(c.estado_certificacion)}
+              variant="gradient"
+              size="sm"
+            />
+          </DatoVer>
+          <DatoVer etiqueta="Documento PDF">{c.tiene_pdf ? 'Disponible (botón Ver PDF)' : 'Sin PDF'}</DatoVer>
+        </SeccionVer>
+      </>
+    );
+  };
+
   const columnasTabla = [
-    { Header: 'ID', accessor: 'id', width: '5%' },
-    { Header: 'Nota', accessor: 'nota', width: '10%' },
-    { Header: 'Mes', accessor: 'mes', width: '7%' },
-    { Header: 'N° Documento', accessor: 'numero_documento', width: '9%' },
     {
-      Header: 'Fecha Aprobación',
-      accessor: 'fecha_aprobacion',
-      width: '9%',
-      Cell: FechaAprobacionCell,
+      Header: 'Item',
+      accessor: 'item',
+      width: '4%',
+      // eslint-disable-next-line react/prop-types,react/display-name
+      Cell: ({ row }) => row.index + 1,
     },
-    { Header: 'Meta', accessor: 'numero_meta', width: '7%' },
-    { Header: 'Ámbito', accessor: 'ambito_nombre_corto', width: '8%' },
-    { Header: 'Fuente', accessor: 'fuente_financiamiento_abreviatura', width: '7%' },
     {
-      Header: 'Monto Certificado',
+      Header: 'Nota',
+      accessor: 'nota',
+      width: '12%',
+      Cell: ({ value }) => (
+        <MDTypography variant="button" fontWeight="bold" color="info">
+          {value || '-'}
+        </MDTypography>
+      ),
+    },
+    { Header: 'Documento', accessor: 'numero_documento', width: '13%' },
+    {
+      Header: 'Periodo',
+      accessor: 'mes',
+      width: '10%',
+      Cell: ({ row: { original } }) => (
+        <MDBox lineHeight={1.3}>
+          <MDTypography variant="button" fontWeight="medium" display="block">
+            {original.mes || '-'}
+          </MDTypography>
+          <MDTypography variant="caption" color="text" display="block">
+            {formatearFecha(original.fecha_aprobacion)}
+          </MDTypography>
+        </MDBox>
+      ),
+    },
+    { Header: 'Meta', accessor: 'numero_meta', width: '6%' },
+    { Header: 'Ámbito', accessor: 'ambito_nombre_corto', width: '10%' },
+    { Header: 'Fuente', accessor: 'fuente_financiamiento_abreviatura', width: '8%' },
+    {
+      Header: 'Importes',
       accessor: 'monto_certificado',
-      width: '9%',
-      Cell: MontoCertificadoCell,
+      width: '11%',
+      Cell: ({ row: { original } }) => (
+        <MDBox lineHeight={1.3}>
+          <MDTypography variant="button" fontWeight="bold" color="dark" display="block">
+            {montoPeru(original.monto_certificado)}
+          </MDTypography>
+          <MDTypography variant="caption" color="text" display="block">
+            Utilizado: {montoPeru(original.monto_utilizado)}
+          </MDTypography>
+        </MDBox>
+      ),
     },
     {
-      Header: 'Monto Utilizado',
-      accessor: 'monto_utilizado',
-      width: '9%',
-      Cell: MontoUtilizadoCell,
+      Header: 'Estado',
+      accessor: 'estado_certificacion',
+      width: '10%',
+      Cell: ({ value }) => (
+        <MDBadge badgeContent={value || '-'} color={colorEstadoCertificacion(value)} variant="gradient" size="sm" />
+      ),
     },
-    { Header: 'Estado', accessor: 'estado_certificacion', width: '7%' },
     {
       Header: 'Acciones',
       accessor: 'acciones',
-      width: '12%',
+      width: '16%',
       Cell: AccionesCell,
     },
   ];
@@ -1109,35 +1255,49 @@ function GestionCertificacionesCredito() {
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox py={3}>
-        <MDBox mb={3}>
-          <MDBox display="flex" justifyContent="space-between" alignItems="center">
+        <Card>
+          <MDBox
+            mx={2}
+            mt={-3}
+            py={3}
+            px={2}
+            variant="gradient"
+            bgColor="info"
+            borderRadius="lg"
+            coloredShadow="info"
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            flexWrap="wrap"
+            gap={2}
+          >
             <MDBox>
-              <MDTypography variant="h4" mb={1}>
+              <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
                 Gestión de Certificaciones de Crédito Presupuestario
               </MDTypography>
-              <MDTypography variant="body2" color="text">
+              <MDTypography variant="button" color="white" opacity={0.8}>
                 Administre las certificaciones de crédito presupuestario y sus detalles.
               </MDTypography>
             </MDBox>
-            <MDButton
-              variant="gradient"
-              color="info"
-              startIcon={<AddIcon />}
-              onClick={() => handleOpenDialog()}
-              sx={{ mr: 1 }}
-            >
-              Nueva Certificación
-            </MDButton>
-            <MDButton
-              variant="gradient"
-              color="warning"
-              startIcon={<CloudUploadIcon />}
-              onClick={() => setOpenPdfDialog(true)}
-            >
-              Importar desde PDF
-            </MDButton>
+            <MDBox display="flex" gap={1}>
+              <MDButton
+                variant="contained"
+                color="white"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenDialog()}
+              >
+                Nueva Certificación
+              </MDButton>
+              <MDButton
+                variant="contained"
+                color="warning"
+                startIcon={<CloudUploadIcon />}
+                onClick={() => setOpenPdfDialog(true)}
+              >
+                Importar desde PDF
+              </MDButton>
+            </MDBox>
           </MDBox>
-        </MDBox>
 
         {error && (
           <MDBox mb={2} p={2} sx={{ backgroundColor: '#ffebee', borderRadius: 1 }}>
@@ -1151,20 +1311,61 @@ function GestionCertificacionesCredito() {
           </MDBox>
         ) : (
           <>
+            {/* Indicadores sobre el conjunto completo de certificaciones */}
+            <MDBox px={2} pt={2}>
+              <MDBox display="grid" gridTemplateColumns={{ xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }} gap={2}>
+                {[
+                  { etiqueta: 'Certificaciones', valor: certificaciones.length },
+                  { etiqueta: 'Monto certificado', valor: montoPeru(totalCertificado) },
+                  { etiqueta: 'Monto utilizado', valor: montoPeru(totalUtilizado) },
+                  { etiqueta: 'Saldo disponible', valor: montoPeru(totalCertificado - totalUtilizado) },
+                ].map((item) => (
+                  <MDBox
+                    key={item.etiqueta}
+                    p={2}
+                    sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fff' }}
+                  >
+                    <MDTypography variant="caption" color="secondary" fontWeight="bold" display="block">
+                      {item.etiqueta}
+                    </MDTypography>
+                    <MDTypography variant="h6" fontWeight="bold" color="dark">
+                      {item.valor}
+                    </MDTypography>
+                  </MDBox>
+                ))}
+              </MDBox>
+            </MDBox>
+
             {/* Panel de Filtros */}
-            <Card sx={{ mb: 3 }}>
+            <MDBox px={2} pt={2}>
               <MDBox p={2}>
-                <MDTypography variant="h6" mb={2} fontWeight="bold">
-                  🔍 Filtros
-                </MDTypography>
-                <MDBox display="flex" gap={2} flexWrap="wrap" alignItems="flex-end">
+
+                <MDBox display="flex" flexDirection={{ xs: 'column', md: 'row' }} gap={2} alignItems={{ xs: 'stretch', md: 'flex-end' }} flexWrap="wrap">
                   <TextField
                     label="Filtrar por Ámbito"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <FilterListIcon sx={{ color: '#1A73E8' }} />
+                        </InputAdornment>
+                      ),
+                    }}
                     select
                     value={filtroAmbito || ''}
                     onChange={(e) => setFiltroAmbito(e.target.value || null)}
                     size="small"
-                    sx={{ minWidth: 200 }}
+                    sx={{
+                      minWidth: 240,
+                      backgroundColor: '#fff',
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        '& fieldset': { borderColor: '#1A73E8', borderWidth: '2px' },
+                        '&:hover fieldset': { borderColor: '#1557b0' },
+                        '&.Mui-focused fieldset': { borderColor: '#1557b0' },
+                      },
+                      '& .MuiInputLabel-root': { color: '#1A73E8', fontWeight: 600 },
+                      '& .MuiInputLabel-root.Mui-focused': { color: '#1557b0' },
+                    }}
                   >
                     <MenuItem value="">
                       <em>Todos los Ámbitos</em>
@@ -1178,11 +1379,29 @@ function GestionCertificacionesCredito() {
 
                   <TextField
                     label="Filtrar por Estado"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <FilterListIcon sx={{ color: '#1A73E8' }} />
+                        </InputAdornment>
+                      ),
+                    }}
                     select
                     value={filtroEstado}
                     onChange={(e) => setFiltroEstado(e.target.value)}
                     size="small"
-                    sx={{ minWidth: 200 }}
+                    sx={{
+                      minWidth: 240,
+                      backgroundColor: '#fff',
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        '& fieldset': { borderColor: '#1A73E8', borderWidth: '2px' },
+                        '&:hover fieldset': { borderColor: '#1557b0' },
+                        '&.Mui-focused fieldset': { borderColor: '#1557b0' },
+                      },
+                      '& .MuiInputLabel-root': { color: '#1A73E8', fontWeight: 600 },
+                      '& .MuiInputLabel-root.Mui-focused': { color: '#1557b0' },
+                    }}
                   >
                     <MenuItem value="">
                       <em>Todos los Estados</em>
@@ -1204,18 +1423,12 @@ function GestionCertificacionesCredito() {
                     Limpiar Filtros
                   </MDButton>
 
-                  <MDBox ml="auto">
-                    <MDTypography variant="body2" color="text" fontWeight="bold">
-                      📊 Total: {obtenerCertificacionesFiltradas().length} certificaciones
-                    </MDTypography>
-                  </MDBox>
                 </MDBox>
               </MDBox>
-            </Card>
+            </MDBox>
 
             {/* Tabla de Certificaciones */}
-            <Card>
-              <MDBox p={2}>
+            <MDBox p={2}>
                 <DataTable
                   table={{
                     columns: columnasTabla,
@@ -1226,13 +1439,31 @@ function GestionCertificacionesCredito() {
                   entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20] }}
                   showTotalEntries={true}
                   noEndBorder
+                  vistaMovil
                 />
-              </MDBox>
-            </Card>
+            </MDBox>
           </>
         )}
+        </Card>
       </MDBox>
 
+      {/* Drawer de visualización de la certificación */}
+      <Drawer
+        anchor="right"
+        open={Boolean(certificacionVer)}
+        onClose={() => setCertificacionVer(null)}
+        PaperProps={{ sx: { width: { xs: '100%', sm: 480 } } }}
+      >
+        <MDBox px={3} py={2} display="flex" justifyContent="space-between" alignItems="center" sx={{ backgroundColor: '#1A73E8' }}>
+          <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+            Certificación {certificacionVer?.nota || ''}
+          </MDTypography>
+          <IconButton size="small" onClick={() => setCertificacionVer(null)} sx={{ color: '#fff' }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </MDBox>
+        <MDBox p={3}>{certificacionVer && renderVerCertificacion(certificacionVer)}</MDBox>
+      </Drawer>
       {/* Dialog para crear/editar certificación */}
       <Dialog 
         open={openDialog} 
@@ -1896,7 +2127,7 @@ function GestionCertificacionesCredito() {
                 {
                   Header: 'Partida',
                   accessor: 'partida',
-                  width: '18%',
+                  width: '17%',
                   Cell: ({ cell }) => {
                     const isTotal = cell.row.original.id === 'total';
                     return (
@@ -1917,7 +2148,7 @@ function GestionCertificacionesCredito() {
                 {
                   Header: 'Clasificador',
                   accessor: 'clasificador_nombre',
-                  width: '32%',
+                  width: '30%',
                   Cell: ({ cell }) => {
                     const isTotal = cell.row.original.id === 'total';
                     return (
@@ -1971,7 +2202,7 @@ function GestionCertificacionesCredito() {
                 {
                   Header: 'Utilizado',
                   accessor: 'monto_utilizado',
-                  width: '15%',
+                  width: '14%',
                   Cell: ({ cell }) => {
                     const isTotal = cell.row.original.id === 'total';
                     const valor = parseFloat(cell.value || 0);
@@ -2047,7 +2278,7 @@ function GestionCertificacionesCredito() {
                 {
                   Header: 'Acciones',
                   accessor: 'acciones',
-                  width: '10%',
+                  width: '9%',
                   Cell: ({ cell }) => {
                     const isTotal = cell.row.original.id === 'total';
                     if (isTotal) return null;
@@ -2065,6 +2296,7 @@ function GestionCertificacionesCredito() {
                                 backgroundColor: 'rgba(244, 67, 54, 0.1)',
                               },
                             }}
+                            sx={{ backgroundColor: '#ffebee', '&:hover': { backgroundColor: '#ffcdd2' } }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>

@@ -11,6 +11,8 @@ import {
   TextField,
   Autocomplete,
   Chip,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import MDBox from 'components/MDBox';
 import MDButton from 'components/MDButton';
@@ -18,6 +20,7 @@ import MDTypography from 'components/MDTypography';
 import DashboardLayout from 'examples/LayoutContainers/DashboardLayout';
 import DashboardNavbar from 'examples/Navbars/DashboardNavbar';
 import Footer from 'examples/Footer';
+import 'styles/tablas-responsive.css';
 import DataTable from 'examples/Tables/DataTable';
 import api from 'services/api';
 import Swal from 'sweetalert2';
@@ -25,6 +28,58 @@ import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useAuth } from 'context/AuthContext';
+import MDBadge from 'components/MDBadge';
+import Drawer from '@mui/material/Drawer';
+import CloseIcon from '@mui/icons-material/Close';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { calcularVencimientoRendicion, diasHabilesRespectoHoy } from 'utils/vencimientoRendicion';
+
+// Monto con formato peruano (sin prefijo de moneda)
+const montoPeruFormato = (valor) =>
+  Number(valor || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Fecha dd/mm/aaaa tomada del texto (evita el desfase de zona horaria)
+const fechaDMYFormato = (valor) => {
+  if (!valor) return '-';
+  const [anio, mes, dia] = String(valor).slice(0, 10).split('-');
+  return anio && mes && dia ? `${dia}/${mes}/${anio}` : '-';
+};
+
+// Destinos: los dos primeros y el resto como "+N"
+const resumirDestinosFormato = (texto = '') => {
+  const partes = String(texto)
+    .split(/,\s*|\s+Y\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return { visibles: partes.slice(0, 2), extra: Math.max(partes.length - 2, 0), partes };
+};
+
+// Color del estado real del formato
+const colorEstadoFormato = (estado) => {
+  const colores = { EMITIDO: 'info', RINDIENDO: 'warning', RENDIDO: 'success', ENVIADO: 'secondary', PAGADO: 'secondary' };
+  return colores[estado] || 'light';
+};
+
+// Sección y dato del Drawer de detalle
+const SeccionVerFormato = ({ numero, titulo, children }) => (
+  <MDBox mb={2.5}>
+    <MDTypography variant="caption" fontWeight="bold" color="info" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      {numero} · {titulo}
+    </MDTypography>
+    <MDBox mt={0.5} p={2} sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fafbfc' }}>
+      {children}
+    </MDBox>
+  </MDBox>
+);
+
+const DatoVerFormato = ({ etiqueta, children }) => (
+  <MDBox mb={1}>
+    <MDTypography variant="caption" fontWeight="bold" color="secondary" display="block">
+      {etiqueta}
+    </MDTypography>
+    <MDBox sx={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>{children}</MDBox>
+  </MDBox>
+);
 
 const GestionCertificacionesFormatos = () => {
   const { user } = useAuth();
@@ -42,6 +97,11 @@ const GestionCertificacionesFormatos = () => {
     numero_siaf: '', // 🆕 NÚMERO SIAF (OPCIONAL)
   });
   const [loadingCertificaciones, setLoadingCertificaciones] = useState(false);
+  const [formatoVer, setFormatoVer] = useState(null);
+  const [feriadosSet, setFeriadosSet] = useState(new Set());
+  const [ambitos, setAmbitos] = useState([]);
+  // El ámbito del usuario viene como ambito_id en la sesión; su nombre se resuelve desde la lista de ámbitos
+  const nombreAmbitoUsuario = user?.ambito_nombre || ambitos.find((a) => a.id === user?.ambito_id)?.nombre_corto || null;
 
   // 🆕 Función para calcular días hábiles (lunes a viernes)
   const calcularDiasHabilesRestantes = (fechaRetorno) => {
@@ -107,6 +167,8 @@ const GestionCertificacionesFormatos = () => {
     cargarFormatos();
     cargarCertificaciones();
     cargarMetas();
+    api.request('/feriados').then((r) => setFeriadosSet(new Set((r.feriados || []).map((f) => f.fecha)))).catch(() => {});
+    api.obtenerAmbitos().then((r) => setAmbitos(Array.isArray(r) ? r : [])).catch(() => {});
   }, [user?.id, user?.rol]);
 
   // 🔍 MONITOREAR cambios en formatos
@@ -138,16 +200,6 @@ const GestionCertificacionesFormatos = () => {
       }
 
       console.log('� [3] Datos extraídos, cantidad:', datos.length);
-
-      // 🔐 Filtrar por ámbito si es ADMINISTRATIVO (NO admin)
-      if (user?.rol && user.rol !== 'admin') {
-        console.log(`� [4a] Usuario es ${user.rol}, FILTRANDO por "${user?.ambito_nombre}"`);
-        const antesDelFiltro = datos.length;
-        datos = datos.filter(f => f.ambito_nombre === user?.ambito_nombre);
-        console.log(`📦 [4b] Después del filtro: ${antesDelFiltro} → ${datos.length}`);
-      } else {
-        console.log('� [4c] MOSTRANDO TODOS (admin o sin rol)');
-      }
 
       console.log('📦 [5] FINAL - Llamando setFormatos con:', datos.length, 'registros');
       setFormatos(datos);
@@ -484,232 +536,287 @@ const GestionCertificacionesFormatos = () => {
   };
 
   // 📊 Columnas de la tabla
+  // Situación del plazo de rendición, con la regla compartida (10 días hábiles, sin sábados, domingos ni feriados).
+  // Es independiente del estado del formato.
+  const clasificarPlazo = (f) => {
+    if (f.estado_emision === 'RENDIDO') return { tipo: 'RENDIDO' };
+    if (!['EMITIDO', 'ENVIADO', 'PAGADO', 'RINDIENDO'].includes(f.estado_emision) || !f.fecha_retorno) {
+      return { tipo: 'NO_APLICA' };
+    }
+    const vence = calcularVencimientoRendicion(f.fecha_retorno, feriadosSet);
+    const restante = diasHabilesRespectoHoy(vence, feriadosSet);
+    if (restante < 0) return { tipo: 'ATRASO', dias: Math.abs(restante), vence };
+    return { tipo: 'PLAZO', dias: restante, vence };
+  };
+
+  const etiquetaPlazo = (p) => {
+    switch (p.tipo) {
+      case 'RENDIDO':
+        return { texto: 'Rendición completada', color: 'success' };
+      case 'ATRASO':
+        return { texto: `Atraso: ${p.dias} días`, color: 'error' };
+      case 'PLAZO':
+        if (p.dias === 0) return { texto: 'Vence hoy', color: 'warning' };
+        if (p.dias <= 3) return { texto: `${p.dias} días restantes`, color: 'warning' };
+        return { texto: `${p.dias} días restantes`, color: 'success' };
+      default:
+        return null;
+    }
+  };
+
+  // Indicadores sobre la lista completa de formatos (no solo la página visible)
+  const resumenFormatos = (() => {
+    let emitidos = 0;
+    let enProceso = 0;
+    let rendidos = 0;
+    let atrasados = 0;
+    formatos.forEach((f) => {
+      if (f.estado_emision === 'EMITIDO') emitidos += 1;
+      if (f.estado_emision === 'RINDIENDO') enProceso += 1;
+      if (f.estado_emision === 'RENDIDO') rendidos += 1;
+      if (clasificarPlazo(f).tipo === 'ATRASO') atrasados += 1;
+    });
+    return { total: formatos.length, emitidos, enProceso, rendidos, atrasados };
+  })();
+
+  // Contenido del Drawer de detalle, organizado por secciones
+  const renderVerFormato = (f) => {
+    const p = clasificarPlazo(f);
+    const et = etiquetaPlazo(p);
+    const destinos = resumirDestinosFormato(f.lugar || f.comision_lugar).partes;
+    return (
+      <>
+        <SeccionVerFormato numero="A" titulo="Información del formato">
+          <DatoVerFormato etiqueta="Número de documento">{f.numero_documento || '-'}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Comisionado">{f.usuario_nombre || '-'}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Ámbito">{f.ambito_nombre || '-'}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Destinos">
+            {destinos.length ? (
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {destinos.map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+              </ul>
+            ) : (
+              '-'
+            )}
+          </DatoVerFormato>
+          <DatoVerFormato etiqueta="Fecha de salida">{fechaDMYFormato(f.fecha_salida)}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Fecha de retorno">{fechaDMYFormato(f.fecha_retorno)}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Modalidad de viaje">{f.modalidad_viaje || '-'}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Tipo de formato">{f.tipo_emision || '-'}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Monto">{montoPeruFormato(f.monto_total)}</DatoVerFormato>
+        </SeccionVerFormato>
+        <SeccionVerFormato numero="B" titulo="Certificación presupuestal">
+          <DatoVerFormato etiqueta="Número de CCP">{f.certificacion_nota || 'Sin certificación'}</DatoVerFormato>
+          <MDTypography variant="caption" color="text" display="block">
+            El monto certificado completo se consulta en Certificaciones de Crédito.
+          </MDTypography>
+        </SeccionVerFormato>
+        <SeccionVerFormato numero="C" titulo="Control de rendición">
+          <DatoVerFormato etiqueta="Estado del formato">{f.estado_emision || '-'}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Situación del plazo">{et ? et.texto : '-'}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Fecha de vencimiento">{p.vence ? p.vence.toLocaleDateString('es-ES') : '-'}</DatoVerFormato>
+          <DatoVerFormato etiqueta="Fecha de rendición">{f.fecha_rendicion ? fechaDMYFormato(f.fecha_rendicion) : '-'}</DatoVerFormato>
+        </SeccionVerFormato>
+        <SeccionVerFormato numero="D" titulo="Documentos y operaciones">
+          <MDTypography variant="caption" color="text" display="block">
+            Las operaciones disponibles se realizan con los botones de la fila.
+          </MDTypography>
+        </SeccionVerFormato>
+      </>
+    );
+  };
+
   const columns = useMemo(() => [
-    { Header: 'Número', accessor: 'numero_documento' },
-    { Header: 'Usuario', accessor: 'usuario_nombre' },
-    { 
-      Header: 'Ámbito', 
-      accessor: 'ambito_nombre'
+    {
+      Header: 'Item',
+      accessor: 'item',
+      width: '4%',
+      Cell: ({ row }) => row.index + 1,
     },
-    { Header: 'Lugar', accessor: 'lugar' },
-    { 
-      Header: 'Fechas', 
-      Cell: ({ row }) => {
-        try {
-          const salida = new Date(row.original.fecha_salida).toLocaleDateString();
-          const retorno = new Date(row.original.fecha_retorno).toLocaleDateString();
-          return `${salida} - ${retorno}`;
-        } catch (e) {
-          return 'N/A';
-        }
-      }
+    {
+      Header: 'Documento / Comisionado',
+      accessor: 'numero_documento',
+      width: '17%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row: { original } }) => (
+        <MDBox lineHeight={1.35}>
+          <MDTypography variant="button" fontWeight="bold" color="info" display="block" sx={{ whiteSpace: 'nowrap' }}>
+            {original.numero_documento || '-'}
+          </MDTypography>
+          <MDTypography variant="caption" color="text" display="block" sx={{ whiteSpace: 'normal' }}>
+            {original.usuario_nombre || '-'}
+          </MDTypography>
+        </MDBox>
+      ),
+    },
+    {
+      Header: 'Ámbito / Destino',
+      accessor: 'ambito_nombre',
+      width: '15%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row: { original } }) => {
+        const texto = original.lugar || original.comision_lugar || '';
+        const { visibles, extra } = resumirDestinosFormato(texto);
+        return (
+          <MDBox lineHeight={1.35}>
+            <MDTypography variant="button" fontWeight="medium" display="block" sx={{ whiteSpace: 'normal' }}>
+              {original.ambito_nombre || '-'}
+            </MDTypography>
+            <MDTypography
+              variant="caption"
+              color="text"
+              display="block"
+              title={texto}
+              sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', whiteSpace: 'normal' }}
+            >
+              {visibles.join(', ')}
+              {extra > 0 ? ` (+${extra} más)` : ''}
+            </MDTypography>
+          </MDBox>
+        );
+      },
+    },
+    {
+      Header: 'Período',
+      accessor: 'fecha_salida',
+      width: '13%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row: { original } }) => (
+        <MDTypography variant="button" display="block" sx={{ whiteSpace: 'nowrap' }}>
+          {fechaDMYFormato(original.fecha_salida)} al {fechaDMYFormato(original.fecha_retorno)}
+        </MDTypography>
+      ),
     },
     {
       Header: 'Monto',
-      Cell: ({ row }) => {
-        const monto = parseFloat(row.original.monto_total) || 0;
-        return `S/. ${monto.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      }
+      accessor: 'monto_total',
+      width: '9%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ value }) => (
+        <MDTypography variant="button" fontWeight="bold" color="dark" sx={{ whiteSpace: 'nowrap' }}>
+          {montoPeruFormato(value)}
+        </MDTypography>
+      ),
     },
     {
-      Header: 'Tipo Emisión',
-      accessor: 'tipo_emision',
-      Cell: ({ value }) => {
-        let badgeColor = '#2196f3';
-        let badgeBG = '#e3f2fd';
-
-        if (value === 'REEMBOLSO') {
-          badgeColor = '#4caf50';
-          badgeBG = '#e8f5e9';
-        } else if (value === 'ANTICIPADO') {
-          badgeColor = '#ff9800';
-          badgeBG = '#fff3e0';
-        } else if (value === 'COMPLEMENTARIO') {
-          badgeColor = '#2196f3';
-          badgeBG = '#e3f2fd';
-        }
-
+      Header: 'Rendición',
+      width: '16%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row: { original } }) => {
+        const p = clasificarPlazo(original);
+        const et = etiquetaPlazo(p);
+        if (!et) return '-';
         return (
-          <div style={{
-            backgroundColor: badgeBG,
-            color: badgeColor,
-            padding: '6px 12px',
-            borderRadius: '16px',
-            fontWeight: 'bold',
-            fontSize: '12px',
-            textAlign: 'center',
-            display: 'inline-block'
-          }}>
-            {value || 'N/A'}
-          </div>
+          <MDBox lineHeight={1.35}>
+            <MDBadge badgeContent={et.texto} color={et.color} variant="gradient" size="sm" />
+            {p.vence && (
+              <MDTypography variant="caption" color="text" display="block" sx={{ whiteSpace: 'nowrap' }}>
+                Vence el {p.vence.toLocaleDateString('es-ES')}
+              </MDTypography>
+            )}
+          </MDBox>
         );
-      }
+      },
     },
     {
-      Header: 'Plazo para Rendir',
-      Cell: ({ row }) => {
-        // 🆕 Si ya está RENDIDO, no mostrar
-        if (row.original.estado_emision === 'RENDIDO') {
-          return (
-            <div style={{
-              backgroundColor: '#e8f5e9',
-              color: '#4caf50',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontWeight: 'bold',
-              fontSize: '11px',
-              textAlign: 'center',
-              display: 'inline-block',
-              whiteSpace: 'nowrap'
-            }}>
-              ✅ RENDIDO
-            </div>
-          );
-        }
-
-        const resultado = calcularDiasHabilesRestantes(row.original.fecha_retorno);
-        if (!resultado) return 'N/A';
-
-        let badgeColor = '#4caf50';
-        let badgeBG = '#e8f5e9';
-        let icono = '✅';
-        let textoSecundario = '';
-
-        if (resultado.fuéraDePlazo) {
-          badgeColor = '#c62828';
-          badgeBG = '#ffebee';
-          icono = '🔴';
-          textoSecundario = `ATRASO: ${resultado.diasAtraso} días | Vence: ${resultado.fechaVencimientoFormato}`;
-        } else if (resultado.diasRestantes <= 2) {
-          badgeColor = '#d32f2f';
-          badgeBG = '#ffcdd2';
-          icono = '⚠️';
-          textoSecundario = `Vence: ${resultado.fechaVencimientoFormato}`;
-        } else if (resultado.diasRestantes <= 5) {
-          badgeColor = '#ff9800';
-          badgeBG = '#fff3e0';
-          icono = '⚡';
-          textoSecundario = `Vence: ${resultado.fechaVencimientoFormato}`;
-        } else {
-          textoSecundario = `Vence: ${resultado.fechaVencimientoFormato}`;
-        }
-
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{
-              backgroundColor: badgeBG,
-              color: badgeColor,
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontWeight: 'bold',
-              fontSize: '12px',
-              textAlign: 'center',
-              display: 'inline-block',
-              whiteSpace: 'nowrap'
-            }}>
-              {resultado.fuéraDePlazo
-                ? `${icono} ATRASO: ${resultado.diasAtraso} días`
-                : `${icono} ${resultado.diasRestantes} días`}
-            </div>
-            <div style={{
-              fontSize: '10px',
-              color: badgeColor,
-              fontWeight: '500',
-              textAlign: 'center'
-            }}>
-              {textoSecundario}
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      Header: 'CCP (Certificación)', 
+      Header: 'CCP',
       accessor: 'certificacion_nota',
-      Cell: ({ value }) => value ? (
-        <Chip 
-          label={`CCP: ${value}`} 
-          color="primary" 
-          variant="outlined"
-          size="small"
-        />
-      ) : (
-        <Chip 
-          label="Sin certificación" 
-          color="warning" 
-          variant="filled"
-          size="small"
-        />
-      )
+      width: '11%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ value }) =>
+        value ? (
+          <MDTypography variant="button" fontWeight="bold" color="info" sx={{ whiteSpace: 'nowrap' }}>
+            {value}
+          </MDTypography>
+        ) : (
+          <MDTypography variant="caption" color="warning" sx={{ whiteSpace: 'nowrap' }}>
+            Sin certificación
+          </MDTypography>
+        ),
     },
-    { Header: 'Estado', accessor: 'estado_emision', Cell: ({ value }) => {
-      let badgeColor = 'default';
-      let badgeBG = '#f0f0f0';
-      
-      if (value === 'PAGADO') {
-        badgeColor = '#4caf50'; // Verde
-        badgeBG = '#e8f5e9';
-      } else if (value === 'ENVIADO') {
-        badgeColor = '#2196f3'; // Azul
-        badgeBG = '#e3f2fd';
-      } else if (value === 'EMITIDO') {
-        badgeColor = '#ff9800'; // Naranja
-        badgeBG = '#fff3e0';
-      } else if (value === 'BORRADOR') {
-        badgeColor = '#9c27b0'; // Púrpura
-        badgeBG = '#f3e5f5';
-      } else if (value === 'ANULADO') {
-        badgeColor = '#f44336'; // Rojo
-        badgeBG = '#ffebee';
-      }
-      
-      return (
-        <div style={{
-          backgroundColor: badgeBG,
-          color: badgeColor,
-          padding: '6px 12px',
-          borderRadius: '16px',
-          fontWeight: 'bold',
-          fontSize: '12px',
-          textAlign: 'center',
-          display: 'inline-block'
-        }}>
-          {value}
-        </div>
-      );
-    }},
+    {
+      Header: 'Tipo / Estado',
+      accessor: 'estado_emision',
+      width: '9%',
+      // eslint-disable-next-line react/prop-types
+      Cell: ({ row: { original } }) => (
+        <MDBox lineHeight={1.35}>
+          {original.tipo_emision && (
+            <MDBadge
+              badgeContent={original.tipo_emision}
+              color={original.tipo_emision === 'ANTICIPO' ? 'info' : 'secondary'}
+              variant="gradient"
+              size="sm"
+            />
+          )}
+          <MDBox mt={0.5}>
+            <MDBadge badgeContent={original.estado_emision || '-'} color={colorEstadoFormato(original.estado_emision)} variant="gradient" size="sm" />
+          </MDBox>
+        </MDBox>
+      ),
+    },
     {
       Header: 'Acciones',
+      accessor: 'acciones',
+      width: '6%',
       Cell: ({ row }) => (
         <MDBox sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Button
-            size="small"
-            variant="contained"
-            color="primary"
-            sx={{ color: '#fff' }}
-            startIcon={<EditIcon />}
-            onClick={() => abrirDialogoEditar(row.original)}
-          >
-            Modificar
-          </Button>
+          <Tooltip title="Ver detalle">
+            <span>
+              <IconButton size="small" color="info" onClick={() => setFormatoVer(row.original)} sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' } }}>
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Modificar">
+            <span>
+              <IconButton size="small" color="info" onClick={() => abrirDialogoEditar(row.original)} sx={{ backgroundColor: '#e3f2fd', '&:hover': { backgroundColor: '#bbdefb' }, '&.Mui-disabled': { backgroundColor: '#f5f5f5' } }}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
         </MDBox>
       )
-    }
-  ], []);
+    },
+  ], [feriadosSet]);
 
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox py={3}>
-        <MDBox mb={2}>
-          <MDTypography variant="h4" fontWeight="bold" mb={2}>
-            📋 Gestión de Certificaciones en Formatos
-          </MDTypography>
-          <MDTypography variant="subtitle2" color="textSecondary">
-            {user?.rol === 'admin' 
-              ? '🔑 Visualizando todos los formatos' 
-              : `📍 Formatos del ámbito: ${user?.ambito_nombre}`}
-          </MDTypography>
+        <Card>
+          <MDBox mx={2} mt={-3} py={3} px={2} variant="gradient" bgColor="info" borderRadius="lg" coloredShadow="info">
+            <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+              Gestión de Certificaciones en Formatos
+            </MDTypography>
+            <MDTypography variant="button" color="white" opacity={0.8}>
+              {user?.rol === 'administrativo'
+                ? (nombreAmbitoUsuario ? `Formatos del ámbito: ${nombreAmbitoUsuario}` : 'Formatos del ámbito')
+                : 'Visualizando todos los formatos'}
+            </MDTypography>
+          </MDBox>
+
+        <MDBox px={3} pt={2}>
+          <MDBox display="grid" gridTemplateColumns={{ xs: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }} gap={2}>
+            {[
+              { etiqueta: 'Total de formatos', valor: resumenFormatos.total },
+              { etiqueta: 'Emitidos', valor: resumenFormatos.emitidos },
+              { etiqueta: 'En proceso de rendición', valor: resumenFormatos.enProceso },
+              { etiqueta: 'Rendidos', valor: resumenFormatos.rendidos },
+              { etiqueta: 'Atrasados', valor: resumenFormatos.atrasados },
+            ].map((item) => (
+              <MDBox key={item.etiqueta} p={2} sx={{ border: '1px solid #e8eaed', borderRadius: '8px', backgroundColor: '#fff' }}>
+                <MDTypography variant="caption" color="secondary" fontWeight="bold" display="block">
+                  {item.etiqueta}
+                </MDTypography>
+                <MDTypography variant="h6" fontWeight="bold" color="dark">
+                  {item.valor}
+                </MDTypography>
+              </MDBox>
+            ))}
+          </MDBox>
         </MDBox>
 
         {error && (
@@ -718,13 +825,12 @@ const GestionCertificacionesFormatos = () => {
           </Alert>
         )}
 
-        <Card>
           {loading ? (
             <MDBox p={3} display="flex" justifyContent="center" alignItems="center" minHeight="400px">
               <CircularProgress />
             </MDBox>
           ) : (
-            <MDBox p={3}>
+            <MDBox className="tabla-responsive" sx={{ '& td': { verticalAlign: 'middle' } }}>
               {console.log('🎯 Renderizando tabla con:', { columnCount: columns.length, rowCount: formatos.length, formatos })}
               <DataTable
                 table={{
@@ -736,11 +842,30 @@ const GestionCertificacionesFormatos = () => {
                 entriesPerPage={{ defaultValue: 10, entries: [5, 10, 15, 20, 25] }}
                 showTotalEntries={true}
                 noEndBorder
+                vistaMovil
               />
             </MDBox>
           )}
         </Card>
       </MDBox>
+
+      {/* Drawer de detalle del formato */}
+      <Drawer
+        anchor="right"
+        open={Boolean(formatoVer)}
+        onClose={() => setFormatoVer(null)}
+        PaperProps={{ sx: { width: { xs: '100%', sm: 480 } } }}
+      >
+        <MDBox px={3} py={2} display="flex" justifyContent="space-between" alignItems="center" sx={{ backgroundColor: '#1A73E8' }}>
+          <MDTypography variant="h6" color="white" sx={{ textTransform: 'uppercase' }}>
+            Detalle del formato
+          </MDTypography>
+          <IconButton size="small" onClick={() => setFormatoVer(null)} sx={{ color: '#fff' }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </MDBox>
+        <MDBox p={3}>{formatoVer && renderVerFormato(formatoVer)}</MDBox>
+      </Drawer>
 
       {/* 📝 Diálogo para editar certificación y meta */}
       <Dialog open={openDialog} onClose={cerrarDialogo} maxWidth="sm" fullWidth>
